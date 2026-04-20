@@ -571,6 +571,76 @@ body.role-adam .admin-nav{display:flex}
   </div>
 </div>
 
+<!-- MEMBER EDIT MODAL -->
+<div class="qa-modal" id="memberModal" onclick="if(event.target===this)closeMemberEdit()">
+  <div class="qa-sheet">
+    <div class="qa-grab"></div>
+    <div class="qa-title" id="memberModalTitle">Edit Member</div>
+    <div class="qa-sub" id="memberModalSub">Admin · Member management</div>
+
+    <div class="qa-section-label">User Key (login handle)</div>
+    <input class="qa-input" id="memUserKey" placeholder="e.g. alivia" autocapitalize="none" autocorrect="off">
+
+    <div class="qa-row">
+      <div style="flex:1">
+        <div class="qa-section-label">First Name</div>
+        <input class="qa-input" id="memFirstName" style="margin-bottom:0">
+      </div>
+      <div style="flex:1">
+        <div class="qa-section-label">Last Name</div>
+        <input class="qa-input" id="memLastName" style="margin-bottom:0">
+      </div>
+    </div>
+
+    <div class="qa-section-label">Display Name</div>
+    <input class="qa-input" id="memDisplayName">
+
+    <div class="qa-section-label">Title</div>
+    <input class="qa-input" id="memTitle" placeholder="e.g. Nanny · PA · Groundskeeper">
+
+    <div class="qa-section-label">Role</div>
+    <div class="qa-pill-row" id="memRolePills"></div>
+
+    <div class="qa-row">
+      <div style="flex:1">
+        <div class="qa-section-label">Phone</div>
+        <input class="qa-input" id="memPhone" style="margin-bottom:0" inputmode="tel">
+      </div>
+      <div style="flex:1">
+        <div class="qa-section-label">Email</div>
+        <input class="qa-input" id="memEmail" style="margin-bottom:0" inputmode="email">
+      </div>
+    </div>
+
+    <div class="qa-row">
+      <div style="flex:1">
+        <div class="qa-section-label">Rate ($/hr)</div>
+        <input class="qa-input" id="memRate" style="margin-bottom:0" type="number" step="0.01">
+      </div>
+      <div style="flex:1">
+        <div class="qa-section-label">Start Date</div>
+        <input class="qa-input" id="memStartDate" style="margin-bottom:0" type="date">
+      </div>
+    </div>
+
+    <div class="qa-section-label">Status</div>
+    <div class="qa-pill-row">
+      <span class="qa-pill selected" data-status="active" onclick="toggleMemPill(this,'status')">Active</span>
+      <span class="qa-pill" data-status="pending" onclick="toggleMemPill(this,'status')">Pending</span>
+      <span class="qa-pill" data-status="inactive" onclick="toggleMemPill(this,'status')">Inactive</span>
+    </div>
+
+    <div class="qa-section-label">Notes</div>
+    <textarea class="qa-textarea" id="memNotes" placeholder="Background notes, arrangements, etc."></textarea>
+
+    <div class="qa-actions">
+      <button class="qa-btn" id="memRemoveBtn" onclick="removeMember()" style="flex:1;color:var(--wolf-danger);border-color:var(--wolf-danger)">Remove</button>
+      <button class="qa-btn" onclick="closeMemberEdit()">Cancel</button>
+      <button class="qa-btn primary" onclick="saveMember()"><i class="fa-solid fa-check"></i> Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- HANDOFF MODAL -->
 <div class="qa-modal" id="handoffModal" onclick="if(event.target===this)closeHandoff()">
   <div class="qa-sheet">
@@ -688,12 +758,15 @@ async function installApp(){
   }
 }
 
-// Kaleesi integration (read-only custody calendar)
+// Kaleesi integration (read-only custody calendar) — defaults auto-wired
+const KALEESI_DEFAULT_URL = 'https://ynhotsrphuewesdwqcet.supabase.co';
+const KALEESI_DEFAULT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InluaG90c3JwaHVld2VzZHdxY2V0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU2MzMyNjEsImV4cCI6MjA4MTIwOTI2MX0.nGBRoKiJh2y1BjEZex5CYVY6R-GzAWy7iaPv9r3gs_8';
 let kaleesiClient = null;
 let kaleesiSchedule = null;
 function loadKaleesiCreds(){
-  const url = localStorage.getItem('kaleesi_url');
-  const key = localStorage.getItem('kaleesi_key');
+  // Use user override if set, else fall back to default Kaleesi project
+  const url = localStorage.getItem('kaleesi_url') || KALEESI_DEFAULT_URL;
+  const key = localStorage.getItem('kaleesi_key') || KALEESI_DEFAULT_KEY;
   if(url && key){
     try{
       kaleesiClient = supabase.createClient(url, key);
@@ -744,12 +817,13 @@ async function loadKaleesiSchedule(){
 function renderKaleesiStatus(){
   const el = document.getElementById('kaleesiStatus');
   if(!el) return;
+  const isCustom = !!localStorage.getItem('kaleesi_url');
   if(kaleesiClient && kaleesiSchedule){
     const days = Object.keys(kaleesiSchedule).length;
-    el.textContent = `Connected · ${days} days scheduled`;
+    el.textContent = `${isCustom?'Custom':'Auto'} · ${days} days scheduled`;
     el.style.color = 'var(--wolf-success)';
   } else if(kaleesiClient){
-    el.textContent = 'Connected but no data';
+    el.textContent = 'Connected · loading…';
     el.style.color = 'var(--wolf-warning)';
   } else {
     el.textContent = 'Not connected';
@@ -760,25 +834,39 @@ function getKaleesiDay(dateStr){
   if(!kaleesiSchedule) return null;
   return kaleesiSchedule[dateStr] || null;
 }
+function isAdamCustody(day){
+  if(!day) return false;
+  if(day.type === 'full' && day.parent === 'adam') return true;
+  if(day.type === 'exchange'){
+    // Adam has Kaleesi either before or after the exchange
+    return day.parentBefore === 'adam' || day.parentAfter === 'adam';
+  }
+  // Legacy format
+  return day.parent === 'adam';
+}
+function kaleesiDaySummary(day){
+  if(!day) return null;
+  if(day.type === 'exchange'){
+    const t = day.exchangeTime || '';
+    if(day.parentAfter === 'adam') return { icon:'🦋', text:'Kaleesi PU', exchange: t };
+    return { icon:'👋', text:'Kaleesi DO', exchange: t };
+  }
+  if(day.parent === 'adam' || (day.type==='full' && day.parent==='adam')){
+    return { icon:'🦋', text:'Kaleesi day', exchange:'' };
+  }
+  return { icon:'💤', text:'Marta', exchange:'' };
+}
 function renderKaleesiDayBadge(){
   const badge = document.getElementById('kDayBadge');
   if(!badge || currentUser !== 'adam') return;
   const today = new Date().toISOString().slice(0,10);
   const day = getKaleesiDay(today);
   if(!day){ badge.style.display='none'; return; }
+  const s = kaleesiDaySummary(day);
   badge.style.display = 'flex';
-  const icon = document.getElementById('kDayIcon');
-  const text = document.getElementById('kDayText');
-  const exch = document.getElementById('kDayExchange');
-  if(day.parent === 'adam'){
-    icon.textContent = '🦋';
-    text.textContent = 'Kaleesi day';
-    exch.textContent = day.exchange_time || day.pickup_time || '';
-  } else {
-    icon.textContent = '💤';
-    text.textContent = 'Off day · Marta';
-    exch.textContent = day.exchange_time || '';
-  }
+  document.getElementById('kDayIcon').textContent = s.icon;
+  document.getElementById('kDayText').textContent = s.text;
+  document.getElementById('kDayExchange').textContent = s.exchange;
 }
 
 // Home location (4826 Weaver St, Oswego, IL)
@@ -1289,7 +1377,17 @@ async function loadCalendar(){
       const dayName = d.toLocaleDateString('en-US',{weekday:'long'});
       const datePretty = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
       const kDay = getKaleesiDay(date);
-      const kBadge = kDay ? (kDay.parent==='adam' ? '<span style="margin-left:8px;padding:2px 8px;border-radius:8px;background:rgba(212,175,55,0.18);color:var(--wolf-gold);font-family:\'JetBrains Mono\',monospace;font-size:0.48rem;letter-spacing:1.5px;text-transform:uppercase;border:1px solid var(--wolf-border-strong)">🦋 Kaleesi</span>' : '<span style="margin-left:8px;padding:2px 8px;border-radius:8px;background:var(--wolf-slate);color:var(--wolf-text-muted);font-family:\'JetBrains Mono\',monospace;font-size:0.48rem;letter-spacing:1.5px;text-transform:uppercase;border:1px solid var(--wolf-border)">Marta</span>') : '';
+      let kBadge = '';
+      if(kDay){
+        if(kDay.type === 'exchange'){
+          const t = kDay.exchangeTime || '';
+          kBadge = `<span style="margin-left:8px;padding:2px 8px;border-radius:8px;background:rgba(212,175,55,0.18);color:var(--wolf-gold);font-family:'JetBrains Mono',monospace;font-size:0.48rem;letter-spacing:1.5px;text-transform:uppercase;border:1px solid var(--wolf-border-strong)">🔄 Exchange ${t}</span>`;
+        } else if(isAdamCustody(kDay)){
+          kBadge = `<span style="margin-left:8px;padding:2px 8px;border-radius:8px;background:rgba(212,175,55,0.18);color:var(--wolf-gold);font-family:'JetBrains Mono',monospace;font-size:0.48rem;letter-spacing:1.5px;text-transform:uppercase;border:1px solid var(--wolf-border-strong)">🦋 Kaleesi</span>`;
+        } else {
+          kBadge = `<span style="margin-left:8px;padding:2px 8px;border-radius:8px;background:var(--wolf-slate);color:var(--wolf-text-muted);font-family:'JetBrains Mono',monospace;font-size:0.48rem;letter-spacing:1.5px;text-transform:uppercase;border:1px solid var(--wolf-border)">Marta</span>`;
+        }
+      }
       const evts = byDate[date] || [];
       return `<div class="cal-day">
         <div class="cal-date-label">${datePretty}<span class="day-name">${dayName}</span>${kBadge}</div>
@@ -1384,19 +1482,28 @@ async function loadAdmin(){
 function renderMembers(members){
   const el = document.getElementById('membersList');
   if(!el) return;
+  window.__members = members;
   if(!members.length){ el.innerHTML = emptyHTML('👥','No members','Add someone to get started.'); return; }
-  el.innerHTML = members.map(m=>{
+  const rows = members.map(m=>{
     const clr = m.is_principal ? 'var(--principal)' : (m.user_key==='alivia' ? 'var(--director-rose)' : m.user_key==='chris' ? 'var(--director-em)' : 'var(--wolf-gold)');
     const txtClr = m.is_principal ? 'var(--wolf-black)' : '#fff';
-    return `<div class="member-row">
-      <div class="mem-av" style="background:${clr};color:${txtClr}">${(m.display_name||m.first_name||m.user_key||'?')[0].toUpperCase()}</div>
+    const name = m.display_name || ((m.first_name||'') + ' ' + (m.last_name||'')).trim() || m.user_key;
+    const active = m.status !== 'inactive';
+    return `<div class="member-row" style="cursor:pointer" onclick="openMemberEdit('${m.user_key}')">
+      <div class="mem-av" style="background:${clr};color:${txtClr}">${(name||'?')[0].toUpperCase()}</div>
       <div class="mem-body">
-        <div class="mem-name">${esc(m.display_name||((m.first_name||'')+' '+(m.last_name||'')).trim()||m.user_key)}</div>
+        <div class="mem-name">${esc(name)}</div>
         <div class="mem-role">${esc(m.title||m.role_id||'member')}</div>
       </div>
-      <span class="mem-status active"><i class="fa-solid fa-circle" style="font-size:0.4rem"></i> Active</span>
+      <span class="mem-status ${active?'active':''}" style="${!active?'background:var(--wolf-slate);color:var(--wolf-text-muted);border:1px solid var(--wolf-border)':''}">
+        <i class="fa-solid fa-circle" style="font-size:0.4rem"></i> ${active?'Active':'Inactive'}
+      </span>
     </div>`;
   }).join('');
+  el.innerHTML = rows + `
+    <button onclick="openMemberEdit('')" style="display:block;width:100%;margin-top:10px;padding:12px;border-radius:10px;border:1px dashed var(--wolf-border-strong);background:transparent;color:var(--wolf-gold);font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;font-weight:700">
+      <i class="fa-solid fa-plus"></i> Add Member
+    </button>`;
 }
 
 function renderRoles(roles){
@@ -1565,6 +1672,113 @@ async function submitModal(){
     closeModal();
     showToast('Saved ✓');
   }catch(e){ showToast('Save failed: ' + (e.message||''), 'error'); console.error(e); }
+}
+
+// MEMBER EDIT (Admin)
+let editingMemberKey = null;
+let memStatus = 'active';
+let memRoleId = null;
+
+function openMemberEdit(userKey){
+  editingMemberKey = userKey || null;
+  const isNew = !userKey;
+  const m = isNew ? {} : (window.__members || []).find(x => x.user_key === userKey) || {};
+
+  document.getElementById('memberModalTitle').textContent = isNew ? 'Add Member' : 'Edit Member';
+  document.getElementById('memberModalSub').textContent = isNew ? 'Onboard a new team member' : 'Update member details';
+  document.getElementById('memUserKey').value = m.user_key || '';
+  document.getElementById('memUserKey').disabled = !isNew;
+  document.getElementById('memFirstName').value = m.first_name || '';
+  document.getElementById('memLastName').value = m.last_name || '';
+  document.getElementById('memDisplayName').value = m.display_name || '';
+  document.getElementById('memTitle').value = m.title || '';
+  document.getElementById('memPhone').value = m.phone || '';
+  document.getElementById('memEmail').value = m.email || '';
+  document.getElementById('memRate').value = m.hourly_rate || '';
+  document.getElementById('memStartDate').value = m.start_date || '';
+  document.getElementById('memNotes').value = m.notes || '';
+  memStatus = m.status || 'active';
+  memRoleId = m.role_id || null;
+
+  // Hide remove for principal / new
+  document.getElementById('memRemoveBtn').style.display = (isNew || m.is_principal) ? 'none' : '';
+
+  // Status pills
+  document.querySelectorAll('.qa-pill[data-status]').forEach(p=>{
+    p.classList.toggle('selected', p.dataset.status === memStatus);
+  });
+
+  // Role pills from loaded roles
+  loadRolesForPicker().then(roles=>{
+    const row = document.getElementById('memRolePills');
+    row.innerHTML = roles.map(r=>`<span class="qa-pill${r.id===memRoleId?' selected':''}" data-role="${esc(r.id)}" onclick="toggleMemPill(this,'role')">${r.icon||'🛡️'} ${esc(r.name||r.id)}</span>`).join('');
+  });
+
+  document.getElementById('memberModal').classList.add('open');
+}
+
+async function loadRolesForPicker(){
+  const { data } = await sb.from('floor_roles').select('*');
+  return data || [];
+}
+
+function closeMemberEdit(){ document.getElementById('memberModal').classList.remove('open'); }
+
+function toggleMemPill(el, group){
+  const sel = `.qa-pill[data-${group}]`;
+  document.querySelectorAll(sel).forEach(p=>p.classList.remove('selected'));
+  el.classList.add('selected');
+  if(group === 'status') memStatus = el.dataset.status;
+  else if(group === 'role') memRoleId = el.dataset.role;
+}
+
+async function saveMember(){
+  const userKey = (document.getElementById('memUserKey').value||'').trim().toLowerCase();
+  if(!userKey || !/^[a-z][a-z0-9_]*$/.test(userKey)){
+    showToast('User key: lowercase letters/numbers only','error'); return;
+  }
+  const payload = {
+    user_key: userKey,
+    first_name: (document.getElementById('memFirstName').value||'').trim() || null,
+    last_name: (document.getElementById('memLastName').value||'').trim() || null,
+    display_name: (document.getElementById('memDisplayName').value||'').trim() || null,
+    title: (document.getElementById('memTitle').value||'').trim() || null,
+    role_id: memRoleId || null,
+    phone: (document.getElementById('memPhone').value||'').trim() || null,
+    email: (document.getElementById('memEmail').value||'').trim() || null,
+    hourly_rate: parseFloat(document.getElementById('memRate').value) || null,
+    start_date: document.getElementById('memStartDate').value || null,
+    notes: (document.getElementById('memNotes').value||'').trim() || null,
+    status: memStatus,
+    updated_at: new Date().toISOString()
+  };
+
+  try{
+    if(editingMemberKey){
+      await sb.from('floor_members').update(payload).eq('user_key', editingMemberKey);
+      await writeAudit('member_updated', `Updated ${payload.display_name||userKey}`, { user_key: userKey });
+    } else {
+      payload.created_at = new Date().toISOString();
+      await sb.from('floor_members').insert(payload);
+      await writeAudit('member_added', `Added ${payload.display_name||userKey}`, { user_key: userKey });
+    }
+    closeMemberEdit();
+    showToast(editingMemberKey ? 'Member updated ✓' : 'Member added ✓');
+    await loadAdmin();
+  }catch(e){ showToast('Save failed: ' + (e.message||''),'error'); console.error(e); }
+}
+
+async function removeMember(){
+  if(!editingMemberKey) return;
+  if(!confirm('Remove this member? They will no longer be able to log in.')) return;
+  try{
+    // Soft delete: mark inactive instead of hard delete (keeps audit integrity)
+    await sb.from('floor_members').update({ status:'inactive', updated_at: new Date().toISOString() }).eq('user_key', editingMemberKey);
+    await writeAudit('member_removed', `Removed ${editingMemberKey}`, { user_key: editingMemberKey });
+    closeMemberEdit();
+    showToast('Member removed');
+    await loadAdmin();
+  }catch(e){ showToast('Remove failed','error'); }
 }
 
 // RECURRING TASK ENGINE (client-side, runs on load)
