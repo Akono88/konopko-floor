@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Konopko Floor</title>
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#D4AF37">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="The Floor">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -342,6 +349,14 @@ body.role-adam .admin-nav{display:flex}
     <div class="tab-view active" id="tab-home">
       <div id="adam-hero-block" style="display:none">
         <div class="card adam-hero">
+          <div id="kDayBadge" style="display:none;margin-bottom:12px;padding:8px 12px;background:rgba(212,175,55,0.14);border:1px solid var(--wolf-border-strong);border-radius:10px;display:flex;align-items:center;gap:8px">
+            <span id="kDayIcon" style="font-size:1.2rem">🦋</span>
+            <div style="flex:1">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--wolf-text-muted)">Today</div>
+              <div id="kDayText" style="font-family:'Playfair Display',serif;font-weight:700;font-size:1rem;color:var(--wolf-gold-pale)">Kaleesi day</div>
+            </div>
+            <div id="kDayExchange" style="font-family:'JetBrains Mono',monospace;font-size:0.55rem;color:var(--wolf-gold)"></div>
+          </div>
           <div class="adam-hero-stats">
             <div class="perf-stat"><div class="num" id="stat-open">—</div><div class="lbl">Open</div></div>
             <div class="perf-stat"><div class="num" id="stat-hot" style="color:var(--wolf-danger)">—</div><div class="lbl">Hot</div></div>
@@ -485,6 +500,27 @@ body.role-adam .admin-nav{display:flex}
     <!-- ADMIN (Adam only) -->
     <div class="tab-view" id="tab-admin">
       <div class="card">
+        <div class="card-label"><i class="fa-solid fa-plug"></i> Integrations</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:var(--wolf-slate);border:1px solid var(--wolf-border)">
+            <div style="font-size:1.3rem">🦋</div>
+            <div style="flex:1">
+              <div style="font-size:0.8rem;font-weight:600;color:var(--wolf-text)">Kaleesi Calendar</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:1px;text-transform:uppercase;color:var(--wolf-text-muted);margin-top:2px" id="kaleesiStatus">Not connected</div>
+            </div>
+            <button onclick="openKaleesiConfig()" style="padding:7px 12px;border-radius:8px;border:1px solid var(--wolf-border-strong);background:var(--wolf-gold-whisper);color:var(--wolf-gold);font-size:0.65rem;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase">Configure</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:var(--wolf-slate);border:1px solid var(--wolf-border)">
+            <div style="font-size:1.3rem">📲</div>
+            <div style="flex:1">
+              <div style="font-size:0.8rem;font-weight:600;color:var(--wolf-text)">Install App</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:1px;text-transform:uppercase;color:var(--wolf-text-muted);margin-top:2px" id="installStatus">Add to home screen</div>
+            </div>
+            <button onclick="installApp()" id="installBtn" style="padding:7px 12px;border-radius:8px;border:1px solid var(--wolf-border-strong);background:var(--wolf-gold-whisper);color:var(--wolf-gold);font-size:0.65rem;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase">Install</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-label"><i class="fa-solid fa-users"></i> Members</div>
         <div id="membersList"><div class="loading-dots">Loading…</div></div>
       </div>
@@ -513,6 +549,45 @@ body.role-adam .admin-nav{display:flex}
   </nav>
 
   <div class="toast" id="toast"></div>
+</div>
+
+<!-- KALEESI CONFIG MODAL -->
+<div class="qa-modal" id="kaleesiModal" onclick="if(event.target===this)closeKaleesiConfig()">
+  <div class="qa-sheet">
+    <div class="qa-grab"></div>
+    <div class="qa-title">🦋 Kaleesi Calendar</div>
+    <div class="qa-sub">Read-only custody schedule</div>
+    <div style="padding:12px;background:var(--wolf-slate);border:1px solid var(--wolf-border);border-radius:10px;font-size:0.75rem;color:var(--wolf-text-dim);line-height:1.5;margin-bottom:12px">
+      Paste your Kaleesi Supabase URL and anon key. The Floor reads your custody schedule only — it never writes to the Kaleesi app.
+    </div>
+    <div class="qa-section-label">Kaleesi Supabase URL</div>
+    <input class="qa-input" id="kaleesiUrl" placeholder="https://xxxxx.supabase.co">
+    <div class="qa-section-label">Kaleesi Anon Key</div>
+    <textarea class="qa-textarea" id="kaleesiKey" placeholder="eyJ..." style="font-family:'JetBrains Mono',monospace;font-size:0.7rem"></textarea>
+    <div class="qa-actions">
+      <button class="qa-btn" onclick="disconnectKaleesi()">Disconnect</button>
+      <button class="qa-btn primary" onclick="saveKaleesiConfig()"><i class="fa-solid fa-link"></i> Connect</button>
+    </div>
+  </div>
+</div>
+
+<!-- HANDOFF MODAL -->
+<div class="qa-modal" id="handoffModal" onclick="if(event.target===this)closeHandoff()">
+  <div class="qa-sheet">
+    <div class="qa-grab"></div>
+    <div class="qa-title">Shift Handoff</div>
+    <div class="qa-sub" id="handoffSub">End of shift summary</div>
+    <div style="padding:12px;background:var(--wolf-slate);border:1px solid var(--wolf-border-strong);border-left:3px solid var(--wolf-gold);border-radius:10px;margin-bottom:12px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--wolf-gold);margin-bottom:6px">Auto-draft</div>
+      <div id="handoffDraft" style="font-size:0.8rem;color:var(--wolf-text);line-height:1.5"></div>
+    </div>
+    <div class="qa-section-label">Your notes (optional)</div>
+    <textarea class="qa-textarea" id="handoffNotes" placeholder="Anything to add? Mood, issues, things Adam should know…"></textarea>
+    <div class="qa-actions">
+      <button class="qa-btn" onclick="closeHandoff()">Skip</button>
+      <button class="qa-btn primary" onclick="sendHandoff()"><i class="fa-solid fa-paper-plane"></i> Send to Adam</button>
+    </div>
+  </div>
 </div>
 
 <!-- ADD MODAL -->
@@ -583,6 +658,129 @@ const SUPA_URL = 'https://pvxlouqzmwdcrvmnfqfu.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2eGxvdXF6bXdkY3J2bW5mcWZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2MjY0MzIsImV4cCI6MjA5MjIwMjQzMn0.q22RcLEhswJ_82BovoxBfOJFgMCPfz-cSbU0M9JlJew';
 const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
 
+// PWA: service worker + install prompt
+let deferredInstall = null;
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(e=>console.warn('SW:',e));
+}
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredInstall = e;
+  const el = document.getElementById('installBtn');
+  if(el){ el.style.display='block'; }
+});
+window.addEventListener('appinstalled', ()=>{
+  deferredInstall = null;
+  const el = document.getElementById('installStatus');
+  if(el) el.textContent = 'Installed ✓';
+  const btn = document.getElementById('installBtn');
+  if(btn) btn.style.display='none';
+});
+async function installApp(){
+  if(deferredInstall){
+    deferredInstall.prompt();
+    const { outcome } = await deferredInstall.userChoice;
+    if(outcome==='accepted') showToast('Installing…');
+    deferredInstall = null;
+  } else {
+    // iOS manual instructions
+    showToast('iPhone: Share → Add to Home Screen');
+  }
+}
+
+// Kaleesi integration (read-only custody calendar)
+let kaleesiClient = null;
+let kaleesiSchedule = null;
+function loadKaleesiCreds(){
+  const url = localStorage.getItem('kaleesi_url');
+  const key = localStorage.getItem('kaleesi_key');
+  if(url && key){
+    try{
+      kaleesiClient = supabase.createClient(url, key);
+      return true;
+    }catch(e){ console.warn('Kaleesi client:',e); return false; }
+  }
+  return false;
+}
+function openKaleesiConfig(){
+  const url = localStorage.getItem('kaleesi_url') || '';
+  const key = localStorage.getItem('kaleesi_key') || '';
+  document.getElementById('kaleesiUrl').value = url;
+  document.getElementById('kaleesiKey').value = key;
+  document.getElementById('kaleesiModal').classList.add('open');
+}
+function closeKaleesiConfig(){ document.getElementById('kaleesiModal').classList.remove('open'); }
+async function saveKaleesiConfig(){
+  const url = document.getElementById('kaleesiUrl').value.trim();
+  const key = document.getElementById('kaleesiKey').value.trim();
+  if(!url || !key){ showToast('Both fields required','error'); return; }
+  localStorage.setItem('kaleesi_url', url);
+  localStorage.setItem('kaleesi_key', key);
+  kaleesiClient = supabase.createClient(url, key);
+  closeKaleesiConfig();
+  await loadKaleesiSchedule();
+  renderKaleesiStatus();
+  renderKaleesiDayBadge();
+  showToast('Kaleesi connected ✓');
+}
+function disconnectKaleesi(){
+  localStorage.removeItem('kaleesi_url');
+  localStorage.removeItem('kaleesi_key');
+  kaleesiClient = null;
+  kaleesiSchedule = null;
+  closeKaleesiConfig();
+  renderKaleesiStatus();
+  renderKaleesiDayBadge();
+  showToast('Kaleesi disconnected');
+}
+async function loadKaleesiSchedule(){
+  if(!kaleesiClient) return;
+  try{
+    const { data, error } = await kaleesiClient.from('schedule').select('data').eq('id','main').single();
+    if(error) throw error;
+    kaleesiSchedule = data?.data || {};
+  }catch(e){ console.warn('Kaleesi schedule:',e); kaleesiSchedule = null; }
+}
+function renderKaleesiStatus(){
+  const el = document.getElementById('kaleesiStatus');
+  if(!el) return;
+  if(kaleesiClient && kaleesiSchedule){
+    const days = Object.keys(kaleesiSchedule).length;
+    el.textContent = `Connected · ${days} days scheduled`;
+    el.style.color = 'var(--wolf-success)';
+  } else if(kaleesiClient){
+    el.textContent = 'Connected but no data';
+    el.style.color = 'var(--wolf-warning)';
+  } else {
+    el.textContent = 'Not connected';
+    el.style.color = 'var(--wolf-text-muted)';
+  }
+}
+function getKaleesiDay(dateStr){
+  if(!kaleesiSchedule) return null;
+  return kaleesiSchedule[dateStr] || null;
+}
+function renderKaleesiDayBadge(){
+  const badge = document.getElementById('kDayBadge');
+  if(!badge || currentUser !== 'adam') return;
+  const today = new Date().toISOString().slice(0,10);
+  const day = getKaleesiDay(today);
+  if(!day){ badge.style.display='none'; return; }
+  badge.style.display = 'flex';
+  const icon = document.getElementById('kDayIcon');
+  const text = document.getElementById('kDayText');
+  const exch = document.getElementById('kDayExchange');
+  if(day.parent === 'adam'){
+    icon.textContent = '🦋';
+    text.textContent = 'Kaleesi day';
+    exch.textContent = day.exchange_time || day.pickup_time || '';
+  } else {
+    icon.textContent = '💤';
+    text.textContent = 'Off day · Marta';
+    exch.textContent = day.exchange_time || '';
+  }
+}
+
 // Home location (4826 Weaver St, Oswego, IL)
 const HOME_LOC = { lat: 41.6531106, lng: -88.3657158, radius: 150 };
 
@@ -615,15 +813,23 @@ setInterval(updateClock, 1000);
 updateClock();
 
 // Auth
-function selectUser(key){
+async function selectUser(key){
   currentUser = key;
   localStorage.setItem('floor_user', key);
   document.getElementById('login').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
   document.body.className = 'role-' + key;
   setupHeader();
-  loadAll();
+  // Kaleesi bridge
+  if(loadKaleesiCreds()){
+    await loadKaleesiSchedule();
+    renderKaleesiDayBadge();
+    renderKaleesiStatus();
+  }
+  await loadAll();
   subscribeRealtime();
+  // Post-load automations
+  runRecurringEngine();
 }
 
 function signOut(){
@@ -1018,6 +1224,8 @@ async function clockOut(){
   try{
     clearInterval(clockTimer); clockTimer = null;
     const endTime = new Date().toISOString();
+    const startTime = clockStart;
+    const sid = activeShiftId;
     const dur = Math.floor((new Date(endTime) - clockStart) / 60000);
     await sb.from('floor_shifts').update({
       clock_out_at: endTime,
@@ -1028,6 +1236,10 @@ async function clockOut(){
     activeShiftId = null;
     renderClockedOut();
     showToast('Clocked out');
+    // Auto-handoff for staff
+    if(currentUser !== 'adam' && dur >= 30){
+      setTimeout(()=>triggerHandoff(startTime, endTime, sid), 400);
+    }
   }catch(e){ showToast('Clock-out failed','error'); }
 }
 
@@ -1056,21 +1268,32 @@ async function loadCalendar(){
       .order('event_date',{ascending:true}).order('start_time',{ascending:true});
     const el = document.getElementById('calList');
     if(!el) return;
-    if(!data || !data.length){ el.innerHTML = emptyHTML('📅','No events','Add an event with Quick Log.'); return; }
 
     const byDate = {};
-    for(const e of data){
+    for(const e of (data||[])){
       if(!byDate[e.event_date]) byDate[e.event_date] = [];
       byDate[e.event_date].push(e);
     }
 
-    el.innerHTML = Object.entries(byDate).map(([date, evts])=>{
+    // Union with 7 days (including Kaleesi day badges for empty dates)
+    const todayStr = today.toISOString().slice(0,10);
+    const allDates = new Set(Object.keys(byDate));
+    for(let i = 0; i < 7; i++){
+      const d = new Date(today); d.setDate(d.getDate()+i);
+      allDates.add(d.toISOString().slice(0,10));
+    }
+    const sortedDates = [...allDates].sort();
+
+    el.innerHTML = sortedDates.map(date=>{
       const d = new Date(date+'T12:00:00');
       const dayName = d.toLocaleDateString('en-US',{weekday:'long'});
       const datePretty = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      const kDay = getKaleesiDay(date);
+      const kBadge = kDay ? (kDay.parent==='adam' ? '<span style="margin-left:8px;padding:2px 8px;border-radius:8px;background:rgba(212,175,55,0.18);color:var(--wolf-gold);font-family:\'JetBrains Mono\',monospace;font-size:0.48rem;letter-spacing:1.5px;text-transform:uppercase;border:1px solid var(--wolf-border-strong)">🦋 Kaleesi</span>' : '<span style="margin-left:8px;padding:2px 8px;border-radius:8px;background:var(--wolf-slate);color:var(--wolf-text-muted);font-family:\'JetBrains Mono\',monospace;font-size:0.48rem;letter-spacing:1.5px;text-transform:uppercase;border:1px solid var(--wolf-border)">Marta</span>') : '';
+      const evts = byDate[date] || [];
       return `<div class="cal-day">
-        <div class="cal-date-label">${datePretty}<span class="day-name">${dayName}</span></div>
-        ${evts.map(e=>{
+        <div class="cal-date-label">${datePretty}<span class="day-name">${dayName}</span>${kBadge}</div>
+        ${evts.length ? evts.map(e=>{
           const t = e.all_day ? 'All day' : (e.start_time ? e.start_time.slice(0,5) : '');
           const who = (e.attendees && e.attendees.length) ? e.attendees[0] : (e.created_by || '');
           return `<div class="cal-event">
@@ -1078,7 +1301,7 @@ async function loadCalendar(){
             <span class="cal-event-title">${esc(e.title)}</span>
             ${who ? `<span class="cal-event-who">${esc(who)}</span>` : ''}
           </div>`;
-        }).join('')}
+        }).join('') : '<div style="padding:6px 10px;color:var(--wolf-text-muted);font-size:0.7rem">No events</div>'}
       </div>`;
     }).join('');
   }catch(e){ console.error('loadCalendar',e); }
@@ -1342,6 +1565,119 @@ async function submitModal(){
     closeModal();
     showToast('Saved ✓');
   }catch(e){ showToast('Save failed: ' + (e.message||''), 'error'); console.error(e); }
+}
+
+// RECURRING TASK ENGINE (client-side, runs on load)
+// Checks for recurring tasks and creates next instance if due.
+async function runRecurringEngine(){
+  try{
+    const lastRun = localStorage.getItem('floor_recur_last');
+    const todayStr = new Date().toISOString().slice(0,10);
+    if(lastRun === todayStr) return; // already ran today
+    localStorage.setItem('floor_recur_last', todayStr);
+
+    const { data } = await sb.from('floor_tasks').select('*').not('recurring','is',null).neq('recurring','');
+    if(!data || !data.length) return;
+
+    const todayDate = new Date();
+    const now = new Date().toISOString();
+
+    // Group by (title, assignee) — find latest of each recurring template
+    const templates = {};
+    for(const t of data){
+      const key = `${t.title}||${t.assignee||''}`;
+      if(!templates[key] || new Date(t.created_at) > new Date(templates[key].created_at)){
+        templates[key] = t;
+      }
+    }
+
+    for(const tpl of Object.values(templates)){
+      const interval = (tpl.recurring||'').toLowerCase();
+      const last = new Date(tpl.created_at);
+      let shouldCreate = false;
+      const daysSince = Math.floor((todayDate - last) / 86400000);
+
+      if(interval === 'daily' && daysSince >= 1) shouldCreate = true;
+      else if(interval === 'weekly' && daysSince >= 7) shouldCreate = true;
+      else if(interval === 'monthly' && daysSince >= 28) shouldCreate = true;
+
+      // Don't regenerate if there's already an open instance
+      const hasOpenDupe = data.some(t =>
+        t.title === tpl.title &&
+        t.assignee === tpl.assignee &&
+        t.status !== 'done' &&
+        t.id !== tpl.id
+      );
+      if(hasOpenDupe) shouldCreate = false;
+
+      if(shouldCreate){
+        await sb.from('floor_tasks').insert({
+          title: tpl.title,
+          assignee: tpl.assignee,
+          priority: tpl.priority || 'normal',
+          status: 'open',
+          kind: tpl.kind || 'task',
+          recurring: tpl.recurring,
+          created_by: 'system',
+          created_at: now,
+          updated_at: now,
+          metadata: { auto_generated: true, from_template: tpl.id }
+        });
+        await writeAudit('recurring_created', `Auto-created: ${tpl.title}`, { template_id: tpl.id });
+      }
+    }
+  }catch(e){ console.warn('recur engine:',e); }
+}
+
+// AUTO-HANDOFF DRAFTER
+async function triggerHandoff(shiftStart, shiftEnd, shiftId){
+  if(currentUser === 'adam') return; // principals don't do handoffs
+  try{
+    const startIso = new Date(shiftStart).toISOString();
+    const [tR, mR, rR] = await Promise.all([
+      sb.from('floor_tasks').select('*').eq('assignee',currentUser).gte('updated_at',startIso),
+      sb.from('floor_messages').select('*').eq('author',currentUser).gte('created_at',startIso),
+      sb.from('floor_requests').select('*').eq('submitted_by',currentUser).gte('created_at',startIso),
+    ]);
+    const tasks = tR.data || [];
+    const msgs = mR.data || [];
+    const reqs = rR.data || [];
+    const done = tasks.filter(t=>t.status==='done');
+    const dur = Math.floor((new Date(shiftEnd) - new Date(shiftStart))/60000);
+    const hrs = Math.floor(dur/60);
+    const mins = dur % 60;
+    const mem = MEMBERS[currentUser] || {name: currentUser};
+
+    const lines = [];
+    lines.push(`${mem.name} · ${new Date(shiftStart).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}`);
+    lines.push(`Shift: ${new Date(shiftStart).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})} → ${new Date(shiftEnd).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})} (${hrs}h ${mins}m)`);
+    if(done.length) lines.push(`Tasks closed: ${done.length}${done.length<=4 ? ' — ' + done.map(t=>t.title).join(', ') : ''}`);
+    else lines.push(`Tasks closed: 0`);
+    if(msgs.length) lines.push(`Messages posted: ${msgs.length}`);
+    if(reqs.length) lines.push(`Requests submitted: ${reqs.length}${reqs.filter(r=>r.status==='pending').length ? ` (${reqs.filter(r=>r.status==='pending').length} pending)` : ''}`);
+
+    const draft = lines.join('\n');
+    window.__handoffData = { shiftId, shiftStart, shiftEnd, draft };
+    document.getElementById('handoffDraft').textContent = draft;
+    document.getElementById('handoffSub').textContent = `${mem.name}'s end-of-shift summary`;
+    document.getElementById('handoffNotes').value = '';
+    document.getElementById('handoffModal').classList.add('open');
+  }catch(e){ console.warn('handoff:',e); }
+}
+
+function closeHandoff(){ document.getElementById('handoffModal').classList.remove('open'); }
+
+async function sendHandoff(){
+  const d = window.__handoffData;
+  if(!d) return closeHandoff();
+  const extra = document.getElementById('handoffNotes').value.trim();
+  const body = `📋 Handoff\n\n${d.draft}${extra ? '\n\nNotes:\n'+extra : ''}`;
+  try{
+    await sb.from('floor_messages').insert({ author: currentUser, body, created_at: new Date().toISOString() });
+    await writeAudit('handoff_sent', `Handoff for ${Math.floor((new Date(d.shiftEnd)-new Date(d.shiftStart))/60000)}m shift`, { shift_id: d.shiftId });
+    showToast('Handoff sent ✓');
+    closeHandoff();
+  }catch(e){ showToast('Failed to send','error'); }
 }
 
 // UTILS
