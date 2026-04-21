@@ -337,6 +337,43 @@ body.role-adam .admin-nav{display:flex}
 .toast.error{background:var(--wolf-danger);color:#fff}
 
 .loading-dots{text-align:center;padding:20px;color:var(--wolf-text-muted);font-family:'JetBrains Mono',monospace;font-size:0.65rem;letter-spacing:2px}
+/* Skeleton loaders */
+.skel{background:linear-gradient(90deg,var(--wolf-slate) 0%,var(--wolf-steel) 50%,var(--wolf-slate) 100%);background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite;border-radius:8px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.skel-row{display:flex;gap:10px;padding:10px 0;align-items:center}
+.skel-circle{width:22px;height:22px;border-radius:50%;flex-shrink:0}
+.skel-bar{flex:1;height:12px}
+.skel-bar.short{flex:0 0 40%;height:8px;margin-top:4px}
+.skel-group{display:flex;flex-direction:column;gap:4px;flex:1}
+/* Connection indicator */
+.conn-dot{display:inline-flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:0.48rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wolf-text-muted);margin-left:8px;vertical-align:middle}
+.conn-dot::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--wolf-text-muted)}
+.conn-dot.online{color:var(--wolf-success)}
+.conn-dot.online::before{background:var(--wolf-success);animation:connPulse 2s ease-in-out infinite}
+.conn-dot.offline{color:var(--wolf-danger)}
+.conn-dot.offline::before{background:var(--wolf-danger)}
+@keyframes connPulse{0%,100%{opacity:1}50%{opacity:0.35}}
+/* Empty state action button */
+.empty-cta{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:10px 18px;border-radius:10px;border:1px solid var(--wolf-gold);background:var(--wolf-gold-whisper);color:var(--wolf-gold);font-family:'Montserrat',sans-serif;font-weight:700;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all 0.15s}
+.empty-cta:hover{background:var(--wolf-gold);color:var(--wolf-black)}
+.empty-cta:active{transform:scale(0.96)}
+/* Morning briefing */
+.brief-card{background:linear-gradient(135deg,rgba(212,175,55,0.12) 0%,rgba(212,175,55,0.02) 100%),var(--wolf-charcoal);border-left:3px solid var(--wolf-gold);padding:16px 18px;border-radius:var(--radius);border-top:1px solid var(--wolf-border);border-right:1px solid var(--wolf-border);border-bottom:1px solid var(--wolf-border);margin-top:10px}
+.brief-hello{font-family:'Playfair Display',serif;font-weight:700;font-size:1.2rem;color:var(--wolf-gold-pale);margin-bottom:4px;line-height:1.2}
+.brief-ts{font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--wolf-text-muted);margin-bottom:12px}
+.brief-line{display:flex;align-items:flex-start;gap:8px;padding:6px 0;font-size:0.78rem;color:var(--wolf-text);line-height:1.4;border-top:1px solid var(--wolf-border)}
+.brief-line:first-of-type{border-top:none}
+.brief-line i{color:var(--wolf-gold);font-size:0.75rem;width:14px;flex-shrink:0;margin-top:3px}
+.brief-line strong{color:var(--wolf-gold-bright);font-weight:700}
+.brief-line em{color:var(--wolf-text-dim);font-style:normal;font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.5px}
+/* Swipe-to-complete */
+.task-item{position:relative;overflow:hidden;transition:transform 0.28s cubic-bezier(.2,.7,.2,1),opacity 0.28s ease}
+.task-item.swiping{transition:none}
+.task-item.swipe-done{transform:translateX(110%)!important;opacity:0}
+.swipe-track{position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-start;padding:0 20px;background:linear-gradient(90deg,var(--wolf-success) 0%,rgba(111,196,123,0.25) 100%);color:#fff;font-family:'JetBrains Mono',monospace;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;font-weight:700;pointer-events:none;opacity:0;z-index:0}
+.swipe-track i{margin-right:8px;font-size:0.85rem}
+.task-item.swipe-reveal .swipe-track{opacity:1}
+.task-item > .task-check,.task-item > .task-body{position:relative;z-index:1;background:transparent}
 
 .sub-head{font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:2.5px;text-transform:uppercase;color:var(--wolf-gold);margin:14px 0 4px;padding:0 4px 4px;border-bottom:1px solid var(--wolf-border);display:flex;align-items:center;justify-content:space-between}
 .sub-head:first-child{margin-top:0}
@@ -408,12 +445,14 @@ body.role-adam .admin-nav{display:flex}
       <h1 id="headerTitle">The Floor</h1>
       <div class="subtitle" id="headerSubtitle">Household Operations</div>
       <div class="clock" id="appClock"></div>
-      <button class="header-signout" onclick="signOut()"><i class="fa-solid fa-right-from-bracket"></i></button>
+      <span class="conn-dot" id="connDot" title="Realtime status">Live</span>
+      <button class="header-signout" onclick="confirmSignOut()"><i class="fa-solid fa-right-from-bracket"></i></button>
     </header>
 
     <!-- HOME -->
     <div class="tab-view active" id="tab-home">
       <div id="adam-hero-block" style="display:none">
+        <div id="brief-slot"></div>
         <div class="card adam-hero">
           <div id="kDayBadge" style="display:none;margin-bottom:12px;padding:8px 12px;background:rgba(212,175,55,0.14);border:1px solid var(--wolf-border-strong);border-radius:10px;display:flex;align-items:center;gap:8px">
             <span id="kDayIcon" style="font-size:1.2rem">🦋</span>
@@ -463,12 +502,14 @@ body.role-adam .admin-nav{display:flex}
       </div>
       <div class="card">
         <div class="card-label"><i class="fa-solid fa-list-check"></i> Today's Tasks <span class="card-label-count" id="homeTaskCount">0</span></div>
-        <div id="homeTaskList"><div class="loading-dots">Loading…</div></div>
+        <div id="homeTaskList"><div class="loading-dots">Loading…</div><!-- -->
+</div>
         <button class="view-all-link" onclick="switchTab('tasks')">View all tasks →</button>
       </div>
       <div class="card" id="homeReqCard" style="display:none">
         <div class="card-label"><i class="fa-solid fa-inbox"></i> Pending Approvals <span class="card-label-count" id="homeReqCount">0</span></div>
-        <div id="homeReqList"><div class="loading-dots">Loading…</div></div>
+        <div id="homeReqList"><div class="loading-dots">Loading…</div><!-- -->
+</div>
         <button class="view-all-link" onclick="switchTab('requests')">View all →</button>
       </div>
     </div>
@@ -480,14 +521,18 @@ body.role-adam .admin-nav{display:flex}
         <div class="filter-row" id="taskFilterRow">
           <button class="filter-chip active" data-filter="all" onclick="filterTasks(this)">All</button>
           <button class="filter-chip" data-filter="mine" onclick="filterTasks(this)">Mine</button>
+          <button class="filter-chip" data-filter="today" onclick="filterTasks(this)">Today</button>
+          <button class="filter-chip" data-filter="week" onclick="filterTasks(this)">This Week</button>
+          <button class="filter-chip" data-filter="overdue" onclick="filterTasks(this)">Overdue</button>
+          <button class="filter-chip" data-filter="hot" onclick="filterTasks(this)">Hot</button>
           <button class="filter-chip" data-filter="adam" onclick="filterTasks(this)">Adam</button>
           <button class="filter-chip" data-filter="alivia" onclick="filterTasks(this)">Alivia</button>
           <button class="filter-chip" data-filter="chris" onclick="filterTasks(this)">Chris</button>
-          <button class="filter-chip" data-filter="hot" onclick="filterTasks(this)">Hot</button>
           <button class="filter-chip" data-filter="open" onclick="filterTasks(this)">Open</button>
           <button class="filter-chip" data-filter="done" onclick="filterTasks(this)">Done</button>
         </div>
-        <div id="taskList"><div class="loading-dots">Loading…</div></div>
+        <div id="taskList" class="skel-init"><!-- skeleton injected on load -->
+</div>
       </div>
     </div>
 
@@ -495,7 +540,8 @@ body.role-adam .admin-nav{display:flex}
     <div class="tab-view" id="tab-calendar">
       <div class="card">
         <div class="card-label"><i class="fa-solid fa-calendar"></i> This Week</div>
-        <div id="calList"><div class="loading-dots">Loading…</div></div>
+        <div id="calList"><div class="loading-dots">Loading…</div><!-- -->
+</div>
       </div>
     </div>
 
@@ -511,11 +557,13 @@ body.role-adam .admin-nav{display:flex}
           <div class="section-chip" data-section="logins" onclick="filterVault(this)"><div class="chip-icon">🔑</div><div class="chip-label">Logins</div></div>
           <div class="section-chip" data-section="kid" onclick="filterVault(this)"><div class="chip-icon">👶</div><div class="chip-label">Kid</div></div>
         </div>
-        <div id="vaultList"><div class="loading-dots">Loading…</div></div>
+        <div id="vaultList"><div class="loading-dots">Loading…</div><!-- -->
+</div>
       </div>
       <div class="card">
         <div class="card-label"><i class="fa-solid fa-cart-shopping"></i> Shopping List</div>
-        <div id="shoppingList"><div class="loading-dots">Loading…</div></div>
+        <div id="shoppingList"><div class="loading-dots">Loading…</div><!-- -->
+</div>
       </div>
     </div>
 
@@ -528,14 +576,16 @@ body.role-adam .admin-nav{display:flex}
           <button class="wire-toggle-btn" onclick="switchWire('notes',this)"><i class="fa-solid fa-sticky-note"></i> Notes</button>
         </div>
         <div class="wire-section active" id="wire-chat">
-          <div class="chat-list" id="chatList"><div class="loading-dots">Loading…</div></div>
+          <div class="chat-list" id="chatList"><div class="loading-dots">Loading…</div><!-- -->
+</div>
           <div class="chat-input-bar">
             <input class="chat-input" id="chatInput" placeholder="Message the floor…" onkeydown="if(event.key==='Enter')sendMessage()">
             <button class="chat-send" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
           </div>
         </div>
         <div class="wire-section" id="wire-notes">
-          <div id="notesList"><div class="loading-dots">Loading…</div></div>
+          <div id="notesList"><div class="loading-dots">Loading…</div><!-- -->
+</div>
         </div>
       </div>
     </div>
@@ -544,7 +594,8 @@ body.role-adam .admin-nav{display:flex}
     <div class="tab-view" id="tab-requests">
       <div class="card">
         <div class="card-label"><i class="fa-solid fa-inbox"></i> Requests <span class="card-label-count" id="reqBadge">0</span></div>
-        <div id="reqList"><div class="loading-dots">Loading…</div></div>
+        <div id="reqList"><div class="loading-dots">Loading…</div><!-- -->
+</div>
       </div>
     </div>
 
@@ -558,7 +609,8 @@ body.role-adam .admin-nav{display:flex}
         <div id="geoInfo"></div>
         <div style="margin-top:12px">
           <div class="sub-head">Recent Shifts</div>
-          <div id="shiftHistory"><div class="loading-dots">Loading…</div></div>
+          <div id="shiftHistory"><div class="loading-dots">Loading…</div><!-- -->
+</div>
         </div>
       </div>
     </div>
@@ -588,15 +640,18 @@ body.role-adam .admin-nav{display:flex}
       </div>
       <div class="card">
         <div class="card-label"><i class="fa-solid fa-users"></i> Members</div>
-        <div id="membersList"><div class="loading-dots">Loading…</div></div>
+        <div id="membersList"><div class="loading-dots">Loading…</div><!-- -->
+</div>
       </div>
       <div class="card">
         <div class="card-label"><i class="fa-solid fa-shield-halved"></i> Roles</div>
-        <div id="rolesList"><div class="loading-dots">Loading…</div></div>
+        <div id="rolesList"><div class="loading-dots">Loading…</div><!-- -->
+</div>
       </div>
       <div class="card">
         <div class="card-label"><i class="fa-solid fa-clipboard-list"></i> Recent Activity</div>
-        <div id="auditList"><div class="loading-dots">Loading…</div></div>
+        <div id="auditList"><div class="loading-dots">Loading…</div><!-- -->
+</div>
       </div>
     </div>
   </div>
@@ -1135,6 +1190,13 @@ async function finishLogin(key){
   localStorage.setItem('floor_session_valid', '1');
   document.body.className = 'role-' + key;
   setupHeader();
+  // Inject skeletons into lists before data arrives
+  const taskListEl = document.getElementById('taskList');
+  if(taskListEl && taskListEl.classList.contains('skel-init')) taskListEl.innerHTML = skeletonRows(4);
+  const homeTasksEl = document.getElementById('homeTaskList');
+  if(homeTasksEl) homeTasksEl.innerHTML = skeletonRows(3);
+  // Cache current user's member data for briefing, etc.
+  if(portalState.member){ window.__adamMember = key === 'adam' ? portalState.member : window.__adamMember; }
   if(loadKaleesiCreds()){
     try{ await loadKaleesiSchedule(); }catch(_){}
     renderKaleesiDayBadge();
@@ -1204,6 +1266,7 @@ let realtimeChannel = null;
 function subscribeRealtime(){
   try{
     if(realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel = null; }
+    setConnState('connecting');
     realtimeChannel = sb.channel('floor-main')
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_tasks'},()=>{loadTasks();loadHome()})
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_messages'},()=>loadMessages())
@@ -1213,8 +1276,11 @@ function subscribeRealtime(){
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_notes'},()=>loadNotes())
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_wiki'},()=>loadVault())
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_events'},()=>loadCalendar())
-      .subscribe();
-  }catch(e){ console.error('realtime',e); }
+      .subscribe((status)=>{
+        if(status === 'SUBSCRIBED') setConnState('online');
+        else if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setConnState('offline');
+      });
+  }catch(e){ console.error('realtime',e); setConnState('offline'); }
 }
 function unsubscribeRealtime(){
   try{ if(realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel = null; } }catch(e){}
@@ -1277,8 +1343,8 @@ async function loadHome(){
     setText('homeTaskCount', openShow.length);
     const el = document.getElementById('homeTaskList');
     if(el){
-      if(!openShow.length) el.innerHTML = emptyHTML('✅','All clear','No open tasks right now.');
-      else el.innerHTML = openShow.map(taskHTML).join('');
+      if(!openShow.length) el.innerHTML = emptyHTML('✅','All clear','No open tasks right now.', { label:'New Task', onclick:"openAddModal('task')" });
+      else { el.innerHTML = openShow.map(taskHTML).join(''); attachTaskSwipe(); }
     }
 
     setText('homeReqCount', reqs.length);
@@ -1286,6 +1352,12 @@ async function loadHome(){
     if(rel){
       if(!reqs.length) rel.innerHTML = emptyHTML('📭','Inbox clear','No pending approvals.');
       else rel.innerHTML = reqs.slice(0,3).map(reqHTML).join('');
+    }
+
+    // Morning briefing (Adam)
+    if(currentUser === 'adam'){
+      allReqs = reqs;
+      renderMorningBriefing();
     }
   }catch(e){ console.error('loadHome',e); }
 }
@@ -1325,17 +1397,37 @@ function filterTasks(btn){
 
 function renderTaskList(tasks, filter){
   let f = [...tasks];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayISO = today.toISOString().slice(0,10);
+  const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7);
+  const weekEndISO = weekEnd.toISOString().slice(0,10);
+
   if(filter==='mine') f = f.filter(t=>t.assignee===currentUser);
+  if(filter==='today') f = f.filter(t=>t.due_date === todayISO && t.status!=='done');
+  if(filter==='week') f = f.filter(t=>t.due_date && t.due_date >= todayISO && t.due_date <= weekEndISO && t.status!=='done');
+  if(filter==='overdue') f = f.filter(t=>t.due_date && t.due_date < todayISO && t.status!=='done');
   if(filter==='adam') f = f.filter(t=>t.assignee==='adam');
   if(filter==='alivia') f = f.filter(t=>t.assignee==='alivia');
   if(filter==='chris') f = f.filter(t=>t.assignee==='chris');
   if(filter==='hot') f = f.filter(t=>t.priority==='hot');
   if(filter==='open') f = f.filter(t=>t.status!=='done');
   if(filter==='done') f = f.filter(t=>t.status==='done');
+
   const el = document.getElementById('taskList');
   if(!el) return;
-  if(!f.length){ el.innerHTML = emptyHTML('📋','Nothing here','No tasks match this filter.'); return; }
+  if(!f.length){
+    const messages = {
+      'today':['📅','Nothing due today','You\'re clear for today.'],
+      'week':['📆','Nothing this week','No tasks have a due date in the next 7 days.'],
+      'overdue':['✅','Nothing overdue','All tasks on or ahead of schedule.'],
+      'done':['✨','No completed tasks','Complete some tasks to see them here.'],
+    };
+    const m = messages[filter] || ['📋','Nothing here','No tasks match this filter.'];
+    el.innerHTML = emptyHTML(m[0], m[1], m[2], filter!=='done' ? { label:'New Task', onclick:"openAddModal('task')" } : null);
+    return;
+  }
   el.innerHTML = f.map(taskHTML).join('');
+  attachTaskSwipe();
 }
 
 async function toggleTask(id, wasDone){
@@ -1360,7 +1452,7 @@ async function loadMessages(){
 function renderChat(msgs){
   const el = document.getElementById('chatList');
   if(!el) return;
-  if(!msgs.length){ el.innerHTML = emptyHTML('💬','No messages yet','Start the conversation.'); return; }
+  if(!msgs.length){ el.innerHTML = emptyHTML('💬','No messages yet','Be the first to post.', { label:'Open Chat', onclick:"document.getElementById('chatInput').focus()" }); return; }
   let html = '';
   for(const m of msgs){
     const d = new Date(m.created_at);
@@ -1402,7 +1494,7 @@ async function loadNotes(){
     const { data } = await sb.from('floor_notes').select('*').eq('archived', false).order('pinned',{ascending:false}).order('created_at',{ascending:false}).limit(30);
     const el = document.getElementById('notesList');
     if(!el) return;
-    if(!data || !data.length){ el.innerHTML = emptyHTML('📝','No notes yet','Add one via Quick Log.'); return; }
+    if(!data || !data.length){ el.innerHTML = emptyHTML('📝','No notes yet','Capture something for the team.', { label:'New Note', onclick:"openAddModal('note')" }); return; }
     el.innerHTML = data.map(n=>`
       <div style="padding:12px 0;border-bottom:1px solid var(--wolf-border)">
         <div style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wolf-gold);margin-bottom:4px">
@@ -1453,7 +1545,7 @@ function renderReqs(reqs){
   setText('reqBadge', pending.length);
   const el = document.getElementById('reqList');
   if(!el) return;
-  if(!reqs.length){ el.innerHTML = emptyHTML('📭','No requests','All clear.'); return; }
+  if(!reqs.length){ el.innerHTML = emptyHTML('📭','No requests','All clear.', { label:'New Request', onclick:"openAddModal('request')" }); return; }
   el.innerHTML = reqs.map(reqHTML).join('');
 }
 
@@ -1694,7 +1786,7 @@ async function loadShopping(){
     const { data } = await sb.from('floor_shopping').select('*').order('status',{ascending:true}).order('created_at',{ascending:false}).limit(30);
     const el = document.getElementById('shoppingList');
     if(!el) return;
-    if(!data || !data.length){ el.innerHTML = emptyHTML('🛒','Empty list','Add items with Quick Log → Shop.'); return; }
+    if(!data || !data.length){ el.innerHTML = emptyHTML('🛒','Empty list','Nothing on the shopping list.', { label:'Add Item', onclick:"openAddModal('shop')" }); return; }
     el.innerHTML = data.map(s=>{
       const bought = s.status === 'bought';
       return `<div class="shopping-item${bought?' bought':''}" data-id="${s.id}">
@@ -2183,8 +2275,172 @@ function relTime(d){
   if(s < 86400) return Math.floor(s/3600) + 'h ago';
   return new Date(d).toLocaleDateString();
 }
-function emptyHTML(icon, title, sub){
-  return `<div class="empty-state"><div class="es-icon">${icon}</div><div class="es-title">${title}</div>${sub?`<div class="es-sub">${sub}</div>`:''}</div>`;
+function emptyHTML(icon, title, sub, cta){
+  // cta = { label: 'Create task', onclick: "openAddModal('task')" }
+  let ctaHtml = '';
+  if(cta && cta.label && cta.onclick){
+    ctaHtml = `<button class="empty-cta" onclick="${cta.onclick}"><i class="fa-solid fa-plus"></i> ${esc(cta.label)}</button>`;
+  }
+  return `<div class="empty-state"><div class="es-icon">${icon}</div><div class="es-title">${title}</div>${sub?`<div class="es-sub">${sub}</div>`:''}${ctaHtml}</div>`;
+}
+
+// Skeleton loaders for initial fetch
+function skeletonRows(n){
+  let html = '';
+  for(let i=0;i<n;i++){
+    html += `<div class="skel-row"><div class="skel skel-circle"></div><div class="skel-group"><div class="skel skel-bar" style="width:${60+Math.random()*30}%"></div><div class="skel skel-bar short"></div></div></div>`;
+  }
+  return html;
+}
+
+// Connection indicator
+let connState = 'connecting';
+function setConnState(state){
+  connState = state;
+  const el = document.getElementById('connDot');
+  if(!el) return;
+  el.classList.remove('online','offline');
+  if(state === 'online'){ el.classList.add('online'); el.textContent = 'Live'; }
+  else if(state === 'offline'){ el.classList.add('offline'); el.textContent = 'Offline'; }
+  else { el.textContent = '…'; }
+}
+window.addEventListener('online', ()=>setConnState('online'));
+window.addEventListener('offline', ()=>setConnState('offline'));
+
+// Sign-out confirmation (prevents accidental taps)
+function confirmSignOut(){
+  if(confirm('Sign out of The Floor?')) signOut();
+}
+
+// Morning briefing — auto-summary for Adam's home
+async function renderMorningBriefing(){
+  const slot = document.getElementById('brief-slot');
+  if(!slot || currentUser !== 'adam') return;
+
+  const now = new Date();
+  const hr = now.getHours();
+  const greet = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
+  const dateStr = now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+
+  // Today (midnight) for overdue/due-today math
+  const today = new Date(now); today.setHours(0,0,0,0);
+  const todayISO = today.toISOString().slice(0,10);
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
+
+  // Gather data from allTasks + allReqs (already loaded) and shifts
+  const openTasks = allTasks.filter(t => t.status !== 'done');
+  const hotOpen = openTasks.filter(t => t.priority === 'hot');
+  const dueToday = openTasks.filter(t => t.due_date === todayISO);
+  const overdue = openTasks.filter(t => t.due_date && t.due_date < todayISO);
+  const pendingReq = (allReqs || []).filter(r => r.status === 'pending');
+
+  // Active shifts (who's on the clock right now)
+  let onClock = [];
+  try{
+    const { data } = await sb.from('floor_shifts').select('person,clock_in_at,clock_in_geo').is('clock_out_at',null);
+    onClock = data || [];
+  }catch(_){}
+
+  // Kaleesi day
+  const kDay = getKaleesiDay ? getKaleesiDay(todayISO) : null;
+
+  // Build briefing lines
+  const lines = [];
+  if(kDay){
+    if(kDay.type === 'exchange'){
+      lines.push(`<div class="brief-line"><i class="fa-solid fa-arrows-left-right-to-line"></i><div><strong>Exchange day</strong> · ${esc(kDay.exchangeTime||'')} ${kDay.parentAfter==='adam'?'(PU)':'(DO)'}</div></div>`);
+    } else if(isAdamCustody && isAdamCustody(kDay)){
+      lines.push(`<div class="brief-line"><i class="fa-solid fa-heart"></i><div><strong>Kaleesi day</strong> · full custody today</div></div>`);
+    } else {
+      lines.push(`<div class="brief-line"><i class="fa-solid fa-moon"></i><div>Off day · Marta has Kaleesi</div></div>`);
+    }
+  }
+
+  if(onClock.length){
+    const names = onClock.map(s => (MEMBERS[s.person]?.name || s.person) + (s.clock_in_geo === 'verified' ? ' ✓' : s.clock_in_geo === 'offsite' ? ' ⚠' : ''));
+    lines.push(`<div class="brief-line"><i class="fa-solid fa-circle-check"></i><div><strong>On the clock:</strong> ${names.join(', ')}</div></div>`);
+  } else {
+    lines.push(`<div class="brief-line"><i class="fa-regular fa-circle"></i><div><em>No one on the clock right now</em></div></div>`);
+  }
+
+  if(hotOpen.length){
+    lines.push(`<div class="brief-line"><i class="fa-solid fa-fire" style="color:var(--wolf-danger)"></i><div><strong>${hotOpen.length} hot task${hotOpen.length===1?'':'s'}</strong> awaiting action</div></div>`);
+  }
+  if(overdue.length){
+    lines.push(`<div class="brief-line"><i class="fa-solid fa-clock-rotate-left" style="color:var(--wolf-warning)"></i><div><strong>${overdue.length} overdue</strong> — pushed past due date</div></div>`);
+  }
+  if(dueToday.length){
+    lines.push(`<div class="brief-line"><i class="fa-solid fa-calendar-day"></i><div><strong>${dueToday.length}</strong> due today</div></div>`);
+  }
+  if(pendingReq.length){
+    lines.push(`<div class="brief-line"><i class="fa-solid fa-inbox"></i><div><strong>${pendingReq.length} request${pendingReq.length===1?'':'s'}</strong> in your inbox</div></div>`);
+  }
+
+  if(!lines.length){
+    lines.push(`<div class="brief-line"><i class="fa-solid fa-check-double" style="color:var(--wolf-success)"></i><div>All clear. No hot tasks, no overdue, inbox empty.</div></div>`);
+  }
+
+  const name = (window.__adamMember && window.__adamMember.display_name) || 'Adam';
+  slot.innerHTML = `<div class="brief-card">
+    <div class="brief-hello">${greet}, ${esc(name)}</div>
+    <div class="brief-ts">${dateStr}</div>
+    ${lines.join('')}
+  </div>`;
+}
+
+// Task swipe-to-complete (touch + pointer)
+function attachTaskSwipe(){
+  const rows = document.querySelectorAll('.task-item:not([data-swipe-bound])');
+  rows.forEach(row => {
+    if(row.dataset.swipeBound === '1') return;
+    row.dataset.swipeBound = '1';
+    let startX = 0, startY = 0, dx = 0, dy = 0, touching = false, decided = false, horizontal = false;
+    const SWIPE_THRESHOLD = 120;
+    const track = document.createElement('div');
+    track.className = 'swipe-track';
+    track.innerHTML = '<i class="fa-solid fa-check"></i>Complete';
+    row.insertBefore(track, row.firstChild);
+
+    function start(e){
+      if(row.classList.contains('done')) return;
+      const t = e.touches ? e.touches[0] : e;
+      startX = t.clientX; startY = t.clientY; dx = 0; dy = 0;
+      touching = true; decided = false; horizontal = false;
+      row.classList.add('swiping');
+    }
+    function move(e){
+      if(!touching) return;
+      const t = e.touches ? e.touches[0] : e;
+      dx = t.clientX - startX; dy = t.clientY - startY;
+      if(!decided && (Math.abs(dx) > 6 || Math.abs(dy) > 6)){
+        horizontal = Math.abs(dx) > Math.abs(dy);
+        decided = true;
+      }
+      if(!horizontal) return;
+      if(e.cancelable) e.preventDefault();
+      dx = Math.max(0, dx); // right-only swipe
+      row.style.transform = 'translateX(' + dx + 'px)';
+      row.classList.toggle('swipe-reveal', dx > 24);
+    }
+    async function end(){
+      if(!touching) return;
+      touching = false;
+      row.classList.remove('swiping','swipe-reveal');
+      if(horizontal && dx > SWIPE_THRESHOLD){
+        const id = row.dataset.id;
+        row.classList.add('swipe-done');
+        setTimeout(async ()=>{
+          try{ await toggleTask(id, false); }catch(_){}
+        }, 260);
+      } else {
+        row.style.transform = '';
+      }
+    }
+    row.addEventListener('touchstart', start, { passive: true });
+    row.addEventListener('touchmove', move, { passive: false });
+    row.addEventListener('touchend', end);
+    row.addEventListener('touchcancel', end);
+  });
 }
 
 // AUTO-LOGIN — if saved session is valid, skip the form; otherwise pre-fill username
