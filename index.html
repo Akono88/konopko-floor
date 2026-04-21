@@ -300,6 +300,7 @@ body.role-adam .header-passkey{display:inline-flex}
 .nav-btn.active i{filter:drop-shadow(0 0 6px rgba(212,175,55,0.6))}
 .admin-nav{display:none}
 body.role-adam .admin-nav{display:flex}
+body.role-adam .only-adam{display:block!important}
 
 /* MODAL */
 .qa-modal{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);display:none;align-items:flex-end;justify-content:center}
@@ -607,10 +608,32 @@ body.role-adam .admin-nav{display:flex}
     <div class="tab-view" id="tab-shifts">
       <div class="card">
         <div class="card-label"><i class="fa-solid fa-clock"></i> Your Shift</div>
+
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin-bottom:10px;border-radius:10px;background:rgba(244,168,56,0.08);border:1px solid rgba(244,168,56,0.3);border-left:3px solid var(--wolf-warning)">
+          <i class="fa-solid fa-triangle-exclamation" style="color:var(--wolf-warning);font-size:0.95rem;margin-top:2px"></i>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:1.8px;text-transform:uppercase;color:var(--wolf-warning);font-weight:700;margin-bottom:3px">Manual only</div>
+            <div style="font-size:0.72rem;color:var(--wolf-text);line-height:1.45">Clock in the moment you arrive. Clock out when you leave. The app does <strong>not</strong> track automatically — missed clocks mean unrecorded hours.</div>
+          </div>
+        </div>
+
+        <div id="longShiftWarn" style="display:none;padding:10px 12px;margin-bottom:10px;border-radius:10px;background:rgba(224,85,64,0.12);border:1px solid var(--wolf-danger);border-left:3px solid var(--wolf-danger);font-size:0.75rem;color:var(--wolf-text);line-height:1.4">
+          <strong style="color:var(--wolf-danger-bg);color:#E87864">⚠ You've been clocked in for <span id="longShiftHours">—</span> hours.</strong>
+          Did you forget to clock out?
+        </div>
+
         <div class="clock-controls" id="clockControls">
           <button class="clock-btn clock-in" onclick="clockIn()"><i class="fa-solid fa-location-dot"></i> Clock In</button>
         </div>
         <div id="geoInfo"></div>
+
+        <div class="only-adam" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--wolf-border)">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--wolf-text-muted);margin-bottom:6px">Principal tools</div>
+          <button onclick="sendClockReminder()" style="width:100%;padding:11px;border-radius:10px;border:1px solid var(--wolf-gold);background:var(--wolf-gold-whisper);color:var(--wolf-gold);font-family:'Montserrat',sans-serif;font-weight:700;font-size:0.7rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer">
+            <i class="fa-solid fa-bullhorn"></i> Send Clock-In Reminder to Team
+          </button>
+        </div>
+
         <div style="margin-top:12px">
           <div class="sub-head">Recent Shifts</div>
           <div id="shiftHistory"><div class="loading-dots">Loading…</div><!-- -->
@@ -1631,6 +1654,18 @@ function tickClock(){
   if(!el) return;
   const s = Math.floor((Date.now()-clockStart)/1000);
   el.textContent = `${pad(Math.floor(s/3600))}:${pad(Math.floor((s%3600)/60))}:${pad(s%60)}`;
+  // Long-shift warning: if clocked in for more than 10 hours, surface a prompt
+  const hours = s / 3600;
+  const warn = document.getElementById('longShiftWarn');
+  if(warn){
+    if(hours >= 10){
+      warn.style.display = '';
+      const hEl = document.getElementById('longShiftHours');
+      if(hEl) hEl.textContent = hours.toFixed(1);
+    } else {
+      warn.style.display = 'none';
+    }
+  }
 }
 
 function distMeters(lat1, lng1, lat2, lng2){
@@ -2338,6 +2373,20 @@ window.addEventListener('offline', ()=>setConnState('offline'));
 // Sign-out confirmation (prevents accidental taps)
 function confirmSignOut(){
   if(confirm('Sign out of The Floor?')) signOut();
+}
+
+// Send clock-in reminder to team via Wire chat (Adam only)
+async function sendClockReminder(){
+  if(currentUser !== 'adam'){ showToast('Principal only','error'); return; }
+  const body = '📢 Reminder from Adam\n\nClock in manually the moment you arrive on-site, and clock out manually when you leave for the day. The app does NOT track you automatically — if you forget, your hours won\'t be recorded.\n\nIf you miss a clock-in or clock-out, let me know and I\'ll correct it.\n\nThanks.';
+  try{
+    await sb.from('floor_messages').insert({ author: 'adam', body, created_at: new Date().toISOString() });
+    await writeAudit('reminder_sent', 'Clock-in/out reminder to team', { channel: 'wire', audience: 'team' });
+    showToast('Reminder posted to Wire ✓');
+  }catch(e){
+    showToast('Failed to send. Try again.','error');
+    console.error(e);
+  }
 }
 
 // ═══ Change My Password (Adam only) ═══
