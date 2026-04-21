@@ -885,14 +885,35 @@ function kaleesiDaySummary(day){
 function renderKaleesiDayBadge(){
   const badge = document.getElementById('kDayBadge');
   if(!badge || currentUser !== 'adam') return;
+  // Hide only if there's literally no Kaleesi schedule loaded at all
+  if(!kaleesiSchedule || !Object.keys(kaleesiSchedule).length){ badge.style.display='none'; return; }
   const today = new Date().toISOString().slice(0,10);
   const day = getKaleesiDay(today);
-  if(!day){ badge.style.display='none'; return; }
-  const s = kaleesiDaySummary(day);
+  const iconEl = document.getElementById('kDayIcon');
+  const textEl = document.getElementById('kDayText');
+  const exchEl = document.getElementById('kDayExchange');
   badge.style.display = 'flex';
-  document.getElementById('kDayIcon').textContent = s.icon;
-  document.getElementById('kDayText').textContent = s.text;
-  document.getElementById('kDayExchange').textContent = s.exchange;
+  if(day){
+    const s = kaleesiDaySummary(day);
+    iconEl.textContent = s.icon;
+    textEl.textContent = s.text;
+    exchEl.textContent = s.exchange;
+    return;
+  }
+  // Today not scheduled — find next Kaleesi (adam) day
+  const dates = Object.keys(kaleesiSchedule).sort();
+  const nextAdamDate = dates.find(d => d >= today && isAdamCustody(kaleesiSchedule[d]));
+  if(nextAdamDate){
+    const d = new Date(nextAdamDate + 'T12:00:00');
+    const diffDays = Math.ceil((new Date(nextAdamDate) - new Date(today)) / 86400000);
+    iconEl.textContent = '📅';
+    textEl.textContent = `Next Kaleesi: ${d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}`;
+    exchEl.textContent = diffDays === 0 ? 'Today' : (diffDays === 1 ? 'Tomorrow' : `${diffDays}d`);
+  } else {
+    iconEl.textContent = '📭';
+    textEl.textContent = 'No upcoming Kaleesi days scheduled';
+    exchEl.textContent = '';
+  }
 }
 
 // Home location (4826 Weaver St, Oswego, IL)
