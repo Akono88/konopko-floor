@@ -53,33 +53,23 @@ body{font-family:'Montserrat',system-ui,sans-serif;background:var(--wolf-black);
 .portal-sub{font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:3px;text-transform:uppercase;color:var(--wolf-text-gold);transition:color 0.3s ease}
 /* Stages */
 .portal-stage{width:100%;max-width:400px;display:none;flex-direction:column;gap:10px}
-#portal[data-state="identity"] .portal-stage[data-stage="identity"],
-#portal[data-state="persona"] .portal-stage[data-stage="persona"],
-#portal[data-state="auth"] .portal-stage[data-stage="persona"],
+#portal[data-state="signin"] .portal-stage[data-stage="signin"],
 #portal[data-state="loading"] .portal-stage[data-stage="loading"]{display:flex;animation:portalFadeIn 0.28s cubic-bezier(.2,.7,.2,1) both}
 @keyframes portalFadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-/* Cards */
-.portal-card{display:flex;align-items:center;gap:14px;padding:18px 16px;border-radius:var(--radius);border:1px solid var(--wolf-border);background:var(--wolf-charcoal);cursor:pointer;transition:background 0.18s ease,border-color 0.18s ease,transform 0.15s ease;box-shadow:var(--shadow-wolf)}
-.portal-card:active{transform:scale(0.97)}
-.portal-card:hover{background:var(--wolf-slate);border-color:var(--wolf-border-strong)}
-.portal-card.adam{border-color:rgba(212,175,55,0.3)}
-.portal-card.alivia{border-color:rgba(216,117,152,0.3)}
-.portal-card.chris{border-color:rgba(107,175,136,0.3)}
-.portal-av{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.1rem;flex-shrink:0}
-.portal-card.adam .portal-av{background:var(--principal);color:var(--wolf-black)}
-.portal-card.alivia .portal-av{background:var(--director-rose);color:#fff}
-.portal-card.chris .portal-av{background:var(--director-em);color:#fff}
-.portal-card-info{flex:1;min-width:0}
-.portal-card-name{font-family:'Playfair Display',serif;font-weight:700;font-size:1.1rem;margin-bottom:3px}
-.portal-card.adam .portal-card-name{color:var(--wolf-gold-pale)}
-.portal-card.alivia .portal-card-name{color:#E99DB3}
-.portal-card.chris .portal-card-name{color:#8FC9A9}
-.portal-card-role{font-family:'JetBrains Mono',monospace;font-size:0.5rem;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:var(--wolf-text-dim)}
-.portal-card-chev{font-size:0.8rem;transition:transform 0.15s ease}
-.portal-card.adam .portal-card-chev{color:var(--wolf-gold)}
-.portal-card.alivia .portal-card-chev{color:var(--director-rose)}
-.portal-card.chris .portal-card-chev{color:var(--director-em)}
-.portal-card:hover .portal-card-chev{transform:translateX(3px)}
+/* Sign-in form card */
+.signin-card{display:flex;flex-direction:column;gap:10px;padding:22px 20px;border-radius:18px;border:1px solid var(--wolf-border-strong);background:var(--wolf-charcoal);box-shadow:var(--shadow-wolf)}
+.signin-field-label{font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--wolf-gold);padding-left:2px;margin-top:4px}
+.signin-input{width:100%;padding:13px 16px;font-family:'Montserrat',sans-serif;font-size:0.9rem;background:var(--wolf-black);color:var(--wolf-text);border:1px solid var(--wolf-border);border-radius:12px;outline:none;transition:border-color 0.15s,box-shadow 0.15s}
+.signin-input:focus{border-color:var(--wolf-gold);box-shadow:0 0 0 3px rgba(212,175,55,0.12)}
+.signin-input.error{border-color:var(--wolf-danger);animation:shake 0.4s ease}
+.signin-submit{margin-top:8px;padding:14px;border-radius:12px;border:1px solid var(--wolf-gold);background:linear-gradient(135deg,var(--wolf-gold-bright),var(--wolf-gold-deep));color:var(--wolf-black);font-family:'Montserrat',sans-serif;font-weight:700;font-size:0.78rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer;position:relative;transition:all 0.15s}
+.signin-submit:active:not(:disabled){transform:scale(0.97)}
+.signin-submit:disabled{opacity:0.55;cursor:not-allowed}
+.signin-submit.submitting .btn-label{opacity:0.85}
+.signin-submit .spinner{display:none;width:13px;height:13px;border:2px solid rgba(0,0,0,0.25);border-top-color:var(--wolf-black);border-radius:50%;animation:spin 0.7s linear infinite;margin-right:6px;vertical-align:-2px}
+.signin-submit.submitting .spinner{display:inline-block}
+.signin-error{min-height:16px;font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:1px;color:var(--wolf-danger);text-align:center;opacity:0;transition:opacity 0.2s}
+.signin-error.show{opacity:1}
 /* Persona card (stages 2+3) */
 .persona-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:20px 18px;border-radius:18px;border:1px solid var(--wolf-border-strong);background:var(--wolf-charcoal);box-shadow:var(--shadow-wolf)}
 .persona-av-wrap{width:72px;height:72px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.7rem;box-shadow:0 4px 24px rgba(0,0,0,0.4),0 0 0 3px var(--wolf-border-strong);animation:avatarPop 0.35s cubic-bezier(.2,.9,.3,1.3) both}
@@ -379,61 +369,28 @@ body.role-adam .admin-nav{display:flex}
 <body>
 
 <!-- PORTAL -->
-<div id="portal" data-state="identity">
+<div id="portal" data-state="signin">
   <div class="portal-header">
     <div class="portal-est">Konopko Operations</div>
-    <div class="portal-title" id="portalTitle">The Floor</div>
-    <div class="portal-sub" id="portalSub">Select your profile</div>
+    <div class="portal-title">The Floor</div>
+    <div class="portal-sub" id="portalSub">Sign in to continue</div>
   </div>
 
-  <!-- Stage 1: Identity -->
-  <div class="portal-stage" data-stage="identity">
-    <div class="portal-card adam" onclick="portalPick('adam')">
-      <div class="portal-av">A</div>
-      <div class="portal-card-info">
-        <div class="portal-card-name">Adam</div>
-        <div class="portal-card-role">Principal · Full Access</div>
-      </div>
-      <i class="fa-solid fa-chevron-right portal-card-chev"></i>
-    </div>
-    <div class="portal-card alivia" onclick="portalPick('alivia')">
-      <div class="portal-av">A</div>
-      <div class="portal-card-info">
-        <div class="portal-card-name">Alivia</div>
-        <div class="portal-card-role">Director · Kid Operations</div>
-      </div>
-      <i class="fa-solid fa-chevron-right portal-card-chev"></i>
-    </div>
-    <div class="portal-card chris" onclick="portalPick('chris')">
-      <div class="portal-av">C</div>
-      <div class="portal-card-info">
-        <div class="portal-card-name">Chris</div>
-        <div class="portal-card-role">Director · Konopko Overwatch</div>
-      </div>
-      <i class="fa-solid fa-chevron-right portal-card-chev"></i>
+  <!-- Stage: Sign-in form -->
+  <div class="portal-stage" data-stage="signin">
+    <div class="signin-card">
+      <div class="signin-field-label">Username</div>
+      <input class="signin-input" id="signinUser" type="text" placeholder="e.g. alivia" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" onkeydown="signinKeydown(event)" onfocus="signinClearError()">
+      <div class="signin-field-label">Password</div>
+      <input class="signin-input" id="signinPass" type="password" placeholder="Enter password" autocomplete="current-password" onkeydown="signinKeydown(event)" onfocus="signinClearError()">
+      <div class="signin-error" id="signinError">&nbsp;</div>
+      <button class="signin-submit" id="signinSubmitBtn" onclick="signinSubmit()">
+        <span class="spinner"></span><span class="btn-label">Sign In</span>
+      </button>
     </div>
   </div>
 
-  <!-- Stage 2+3: Persona (name + optional password) -->
-  <div class="portal-stage" data-stage="persona">
-    <div class="persona-wrap" id="personaWrap">
-      <div class="persona-av-wrap" id="personaAv"></div>
-      <div class="persona-name-big" id="personaName">—</div>
-      <div class="persona-role-line" id="personaRole">—</div>
-
-      <div class="persona-auth-slot">
-        <input class="persona-input" type="password" id="pwInput" placeholder="Enter password" autocomplete="current-password" onkeydown="portalKeydown(event)" onfocus="portalClearError()">
-        <div class="persona-error" id="pwError"></div>
-      </div>
-
-      <div class="persona-actions">
-        <button class="persona-btn secondary" onclick="portalBack()" id="portalBackBtn"><span class="btn-label">Back</span></button>
-        <button class="persona-btn primary" onclick="portalSubmit()" id="portalSubmitBtn"><span class="spinner"></span><span class="btn-label">Sign In</span></button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Stage 4: Loading -->
+  <!-- Stage: Loading (after successful sign-in) -->
   <div class="portal-stage" data-stage="loading">
     <div class="loading-wrap">
       <div class="persona-av-wrap" id="loadingAv"></div>
@@ -752,13 +709,6 @@ body.role-adam .admin-nav{display:flex}
     <div class="qa-section-label">Notes</div>
     <textarea class="qa-textarea" id="memNotes" placeholder="Background notes, arrangements, etc."></textarea>
 
-    <div class="qa-section-label">Sign-In Link</div>
-    <div id="memSigninLink" style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;letter-spacing:0.3px;color:var(--wolf-gold);padding:10px 12px;background:var(--wolf-slate);border:1px solid var(--wolf-border);border-radius:10px;margin-bottom:8px;word-break:break-all">—</div>
-    <div class="qa-row" style="margin-bottom:12px">
-      <button type="button" onclick="copyMemberLink()" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--wolf-border-strong);background:var(--wolf-gold-whisper);color:var(--wolf-gold);font-family:'Montserrat',sans-serif;font-weight:700;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer"><i class="fa-solid fa-link"></i> Copy Link</button>
-      <button type="button" onclick="shareMemberLink()" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--wolf-border);background:var(--wolf-slate);color:var(--wolf-text-dim);font-family:'Montserrat',sans-serif;font-weight:700;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer"><i class="fa-solid fa-share-nodes"></i> Share</button>
-    </div>
-
     <div class="qa-actions">
       <button class="qa-btn" id="memRemoveBtn" onclick="removeMember()" style="flex:1;color:var(--wolf-danger);border-color:var(--wolf-danger)">Remove</button>
       <button class="qa-btn" onclick="closeMemberEdit()">Cancel</button>
@@ -1059,10 +1009,10 @@ setInterval(updateClock, 1000);
 updateClock();
 
 // Auth
-// ═══ AUTH STATE MACHINE (portal) ═══
-// States: identity | persona | auth | loading | app
-// Selected user data flows through a single portalState object.
-// setPortalState() re-renders the UI from state; no ad-hoc DOM manipulation.
+// ═══ AUTH STATE MACHINE (unified sign-in) ═══
+// States: signin | loading → app
+// A single username/password form validates against floor_members.
+// No user list is exposed publicly.
 
 async function hashPassword(userKey, password){
   const enc = new TextEncoder();
@@ -1072,10 +1022,10 @@ async function hashPassword(userKey, password){
 }
 
 const portalState = {
-  stage: 'identity',      // identity | persona | auth | loading
-  selected: null,         // user_key
-  member: null,           // loaded row from floor_members
-  submitting: false,      // lock prevents double-submission
+  stage: 'signin',        // signin | loading
+  submitting: false,
+  selected: null,         // user_key (set after successful sign-in)
+  member: null,           // member row (set after successful sign-in)
   error: null
 };
 
@@ -1089,36 +1039,7 @@ function renderPortal(){
   if(!portal) return;
   portal.dataset.state = portalState.stage;
 
-  // Header text adapts by stage
-  const title = document.getElementById('portalTitle');
-  const sub = document.getElementById('portalSub');
-  if(portalState.stage === 'identity'){
-    title.textContent = 'The Floor';
-    sub.textContent = 'Select your profile';
-  } else if(portalState.stage === 'persona' || portalState.stage === 'auth'){
-    title.textContent = 'The Floor';
-    sub.textContent = portalState.stage === 'auth' ? 'Enter your password' : 'Welcome back';
-  } else if(portalState.stage === 'loading'){
-    title.textContent = 'The Floor';
-    sub.textContent = 'Entering your space';
-  }
-
-  // Persona stage visuals
-  if(portalState.selected && (portalState.stage === 'persona' || portalState.stage === 'auth')){
-    const mem = MEMBERS[portalState.selected] || {};
-    const m = portalState.member || {};
-    const av = document.getElementById('personaAv');
-    const name = document.getElementById('personaName');
-    const role = document.getElementById('personaRole');
-    const wrap = document.getElementById('personaWrap');
-    av.className = 'persona-av-wrap ' + (mem.cls || '');
-    av.textContent = ((m.display_name || m.first_name || portalState.selected)[0] || '?').toUpperCase();
-    name.textContent = m.display_name || m.first_name || mem.name || portalState.selected;
-    role.textContent = m.title || mem.role || '—';
-    wrap.classList.remove('success');
-  }
-
-  // Loading stage avatar mirror
+  // Loading stage avatar personalization
   if(portalState.stage === 'loading' && portalState.selected){
     const mem = MEMBERS[portalState.selected] || {};
     const m = portalState.member || {};
@@ -1128,99 +1049,82 @@ function renderPortal(){
     document.getElementById('loadingText').textContent = 'Loading ' + (m.display_name || mem.name || portalState.selected) + '\'s space…';
   }
 
-  // Error display
-  const errEl = document.getElementById('pwError');
-  const inputEl = document.getElementById('pwInput');
-  if(errEl && inputEl){
+  // Error
+  const errEl = document.getElementById('signinError');
+  const userInp = document.getElementById('signinUser');
+  const passInp = document.getElementById('signinPass');
+  if(errEl){
     if(portalState.error){
       errEl.textContent = portalState.error;
       errEl.classList.add('show');
-      inputEl.classList.add('error');
+      userInp.classList.add('error');
+      passInp.classList.add('error');
     } else {
       errEl.classList.remove('show');
-      inputEl.classList.remove('error');
+      errEl.textContent = '\u00a0';
+      userInp.classList.remove('error');
+      passInp.classList.remove('error');
     }
   }
 
   // Submit button state
-  const submitBtn = document.getElementById('portalSubmitBtn');
-  const backBtn = document.getElementById('portalBackBtn');
-  if(submitBtn && backBtn){
-    submitBtn.disabled = portalState.submitting;
-    backBtn.disabled = portalState.submitting;
-    submitBtn.classList.toggle('submitting', portalState.submitting);
-    submitBtn.querySelector('.btn-label').textContent = portalState.submitting ? 'Signing in' : 'Sign In';
-  }
-
-  // Focus password input when auth stage opens
-  if(portalState.stage === 'auth' && inputEl){
-    setTimeout(()=>{ try{ inputEl.focus(); }catch(_){} }, 80);
+  const submit = document.getElementById('signinSubmitBtn');
+  if(submit){
+    submit.disabled = portalState.submitting;
+    submit.classList.toggle('submitting', portalState.submitting);
+    submit.querySelector('.btn-label').textContent = portalState.submitting ? 'Signing in' : 'Sign In';
   }
 }
 
-// Tap a portal card
-async function portalPick(key){
-  if(portalState.submitting) return;
-  setPortalState({ stage: 'persona', selected: key, member: null, error: null });
-
-  // Fetch member in background — if they have a password, transition to auth
-  try{
-    const { data } = await sb.from('floor_members').select('password_hash, display_name, first_name, title').eq('user_key', key).single();
-    setPortalState({ member: data || {} });
-    if(data && data.password_hash){
-      // Brief pause so the persona card is visible before the input slides in
-      setTimeout(()=>{
-        if(portalState.selected === key && portalState.stage === 'persona'){
-          setPortalState({ stage: 'auth' });
-        }
-      }, 320);
-    } else {
-      // No password — straight to loading
-      setTimeout(()=>{
-        if(portalState.selected === key) finishLogin(key);
-      }, 450);
-    }
-  }catch(e){
-    // Member row missing — still try a passwordless login
-    setTimeout(()=>{ if(portalState.selected === key) finishLogin(key); }, 450);
-  }
-}
-
-function portalBack(){
-  if(portalState.submitting) return;
-  setPortalState({ stage: 'identity', selected: null, member: null, error: null });
-  const inp = document.getElementById('pwInput');
-  if(inp) inp.value = '';
-}
-
-function portalClearError(){
+function signinClearError(){
   if(portalState.error) setPortalState({ error: null });
 }
 
-function portalKeydown(e){
-  if(e.key === 'Enter'){ e.preventDefault(); portalSubmit(); }
-  else if(e.key === 'Escape'){ e.preventDefault(); portalBack(); }
+function signinKeydown(e){
+  if(e.key === 'Enter'){ e.preventDefault(); signinSubmit(); }
 }
 
-async function portalSubmit(){
-  if(portalState.submitting || portalState.stage !== 'auth') return;
-  const input = document.getElementById('pwInput');
-  const pw = (input.value || '').trim();
-  if(!pw){ setPortalState({ error: 'Enter your password' }); return; }
+async function signinSubmit(){
+  if(portalState.submitting) return;
+  const user = (document.getElementById('signinUser').value||'').trim().toLowerCase();
+  const pass = (document.getElementById('signinPass').value||'');
+  if(!user){ setPortalState({ error: 'Enter your username' }); return; }
+  if(!pass){ setPortalState({ error: 'Enter your password' }); return; }
 
   setPortalState({ submitting: true, error: null });
-  const hashed = await hashPassword(portalState.selected, pw);
-  const correct = portalState.member && hashed === portalState.member.password_hash;
 
-  if(correct){
-    // Success flash before transition
-    const wrap = document.getElementById('personaWrap');
-    if(wrap) wrap.classList.add('success');
-    setTimeout(()=>{ finishLogin(portalState.selected); }, 300);
-  } else {
-    setPortalState({ submitting: false, error: 'Incorrect password' });
-    input.value = '';
-    setTimeout(()=>{ try{ input.focus(); }catch(_){} }, 50);
+  try{
+    const { data, error } = await sb.from('floor_members')
+      .select('user_key, display_name, first_name, title, password_hash, status')
+      .eq('user_key', user)
+      .maybeSingle();
+
+    if(error) throw error;
+    if(!data || data.status === 'inactive'){
+      // Generic error — don't leak whether the username exists
+      setPortalState({ submitting: false, error: 'Invalid username or password' });
+      document.getElementById('signinPass').value = '';
+      return;
+    }
+
+    // Password check (if no hash set, allow direct login — admin hasn't set one yet)
+    if(data.password_hash){
+      const hashed = await hashPassword(data.user_key, pass);
+      if(hashed !== data.password_hash){
+        setPortalState({ submitting: false, error: 'Invalid username or password' });
+        document.getElementById('signinPass').value = '';
+        try{ document.getElementById('signinPass').focus(); }catch(_){}
+        return;
+      }
+    }
+
+    // Success — move to loading and finish
+    portalState.selected = data.user_key;
+    portalState.member = data;
+    finishLogin(data.user_key);
+  }catch(e){
+    console.error('signin error:', e);
+    setPortalState({ submitting: false, error: 'Sign-in failed. Check your connection.' });
   }
 }
 
@@ -1229,7 +1133,6 @@ async function finishLogin(key){
   currentUser = key;
   localStorage.setItem('floor_user', key);
   localStorage.setItem('floor_session_valid', '1');
-  updateUrlForUser(key);
   document.body.className = 'role-' + key;
   setupHeader();
   if(loadKaleesiCreds()){
@@ -1243,12 +1146,15 @@ async function finishLogin(key){
   // Reveal app
   document.getElementById('portal').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
-  // Reset portal state for next sign-out (keep selected so header still makes sense if sign-in fails)
   Object.assign(portalState, { submitting: false, error: null });
 }
 
-// Legacy shim so existing code that calls selectUser() still works
-function selectUser(key){ portalPick(key); }
+// Legacy shim so any remaining references don't break
+function selectUser(key){
+  // Pre-fill username field and let user type password
+  const u = document.getElementById('signinUser');
+  if(u && MEMBERS[key]){ u.value = key; document.getElementById('signinPass').focus(); }
+}
 
 function signOut(){
   if(clockTimer) clearInterval(clockTimer);
@@ -1256,14 +1162,16 @@ function signOut(){
   currentUser = null;
   localStorage.removeItem('floor_user');
   localStorage.removeItem('floor_session_valid');
-  // Strip the ?user= param so signing back in doesn't auto-select the last user
-  try{ const url = new URL(window.location.href); url.searchParams.delete('user'); history.replaceState(null,'',url.toString()); }catch(_){}
   document.getElementById('main-app').style.display = 'none';
   document.getElementById('portal').style.display = '';
   document.body.className = '';
-  setPortalState({ stage: 'identity', selected: null, member: null, submitting: false, error: null });
-  const inp = document.getElementById('pwInput');
-  if(inp) inp.value = '';
+  setPortalState({ stage: 'signin', selected: null, member: null, submitting: false, error: null });
+  // Clear the form so no leftover credentials
+  const u = document.getElementById('signinUser');
+  const p = document.getElementById('signinPass');
+  if(u) u.value = '';
+  if(p) p.value = '';
+  if(u) try{ u.focus(); }catch(_){}
 }
 
 function setupHeader(){
@@ -2045,17 +1953,6 @@ function openMemberEdit(userKey){
   // Hide remove for principal / new
   document.getElementById('memRemoveBtn').style.display = (isNew || m.is_principal) ? 'none' : '';
 
-  // Sign-in link
-  const linkEl = document.getElementById('memSigninLink');
-  if(linkEl){
-    if(userKey){
-      const origin = window.location.origin + window.location.pathname;
-      linkEl.textContent = origin + '?user=' + userKey;
-    } else {
-      linkEl.textContent = 'Save member first — link will appear here.';
-    }
-  }
-
   // Password status
   document.getElementById('memPassword').value = '';
   const pwStatus = document.getElementById('memPasswordStatus');
@@ -2085,52 +1982,6 @@ async function loadRolesForPicker(){
 }
 
 function closeMemberEdit(){ document.getElementById('memberModal').classList.remove('open'); }
-
-function memberSigninUrl(){
-  if(!editingMemberKey) return null;
-  return window.location.origin + window.location.pathname + '?user=' + editingMemberKey;
-}
-
-async function copyMemberLink(){
-  const url = memberSigninUrl();
-  if(!url){ showToast('Save member first','error'); return; }
-  try{
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      await navigator.clipboard.writeText(url);
-      showToast('Link copied ✓');
-    } else {
-      // Fallback for older browsers / non-https
-      const ta = document.createElement('textarea');
-      ta.value = url;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      showToast('Link copied ✓');
-    }
-  }catch(e){ showToast('Copy failed','error'); }
-}
-
-async function shareMemberLink(){
-  const url = memberSigninUrl();
-  if(!url){ showToast('Save member first','error'); return; }
-  const name = (window.__members || []).find(m => m.user_key === editingMemberKey)?.display_name || editingMemberKey;
-  const payload = {
-    title: 'The Floor · sign-in',
-    text: `${name}, tap this to open The Floor. Install it to your home screen from there.`,
-    url
-  };
-  try{
-    if(navigator.share){
-      await navigator.share(payload);
-    } else {
-      // No native share — fall through to copy
-      await copyMemberLink();
-    }
-  }catch(e){
-    if(e && e.name !== 'AbortError') showToast('Share failed','error');
-  }
-}
 
 function toggleMemPill(el, group){
   const sel = `.qa-pill[data-${group}]`;
@@ -2336,56 +2187,34 @@ function emptyHTML(icon, title, sub){
   return `<div class="empty-state"><div class="es-icon">${icon}</div><div class="es-title">${title}</div>${sub?`<div class="es-sub">${sub}</div>`:''}</div>`;
 }
 
-// URL-based profile targeting (?user=adam|alivia|chris)
-function getUrlUser(){
-  try{
-    const p = new URLSearchParams(window.location.search);
-    const u = (p.get('user')||'').toLowerCase();
-    return MEMBERS[u] ? u : null;
-  }catch(_){ return null; }
-}
-
-function updateUrlForUser(key){
-  try{
-    const url = new URL(window.location.href);
-    url.searchParams.set('user', key);
-    history.replaceState(null, '', url.toString());
-  }catch(_){}
-}
-
-// AUTO-LOGIN — URL param overrides saved session; session bypasses password
+// AUTO-LOGIN — if saved session is valid, skip the form; otherwise pre-fill username
 (async function autoLogin(){
-  const urlUser = getUrlUser();
   const saved = localStorage.getItem('floor_user');
   const sessionOk = localStorage.getItem('floor_session_valid') === '1';
 
-  // URL param wins. If it matches saved + session valid → skip to app.
-  // If it differs from saved → drop the stale session and prompt for password.
-  if(urlUser){
-    if(urlUser === saved && sessionOk){
-      try{
-        const { data } = await sb.from('floor_members').select('display_name, first_name, title').eq('user_key', urlUser).single();
-        setPortalState({ selected: urlUser, member: data || {} });
-      }catch(_){}
-      finishLogin(urlUser);
-    } else {
-      // Different user in URL, or no session — run the portal select flow
-      localStorage.removeItem('floor_session_valid');
-      portalPick(urlUser);
-    }
-    return;
+  if(saved && sessionOk){
+    try{
+      const { data } = await sb.from('floor_members').select('user_key, display_name, first_name, title, status').eq('user_key', saved).single();
+      if(data && data.status !== 'inactive'){
+        portalState.selected = saved;
+        portalState.member = data;
+        finishLogin(saved);
+        return;
+      }
+    }catch(_){}
+    // Session existed but member lookup failed — clear stale session
+    localStorage.removeItem('floor_session_valid');
   }
 
-  // No URL param — fall back to saved session
-  if(!saved || !MEMBERS[saved]) return;
-  if(sessionOk){
-    try{
-      const { data } = await sb.from('floor_members').select('display_name, first_name, title').eq('user_key', saved).single();
-      setPortalState({ selected: saved, member: data || {} });
-    }catch(_){}
-    finishLogin(saved);
+  if(saved){
+    // Pre-fill the username (common case: returning user who signed out)
+    const u = document.getElementById('signinUser');
+    if(u) u.value = saved;
+    const p = document.getElementById('signinPass');
+    if(p) try{ p.focus(); }catch(_){}
   } else {
-    portalPick(saved);
+    const u = document.getElementById('signinUser');
+    if(u) try{ u.focus(); }catch(_){}
   }
 })();
 </script>
