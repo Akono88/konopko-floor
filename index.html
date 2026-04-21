@@ -44,26 +44,79 @@ body{font-family:'Montserrat',system-ui,sans-serif;background:var(--wolf-black);
   body{padding-top:env(safe-area-inset-top,0px)}
 }
 
-/* LOGIN */
-#login{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:calc(24px + env(safe-area-inset-top,0px)) 20px calc(24px + env(safe-area-inset-bottom,0px))}
-.login-est{display:inline-flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:0.55rem;font-weight:500;letter-spacing:2.5px;text-transform:uppercase;color:var(--wolf-text-muted);margin-bottom:8px}
-.login-est::before,.login-est::after{content:'';width:20px;height:1px;background:var(--wolf-gold)}
-.login-title{font-family:'Playfair Display',serif;font-weight:800;font-size:2.4rem;color:var(--wolf-gold-pale);text-align:center;margin-bottom:4px;line-height:1.1}
-.login-sub{font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:3px;text-transform:uppercase;color:var(--wolf-text-gold);text-align:center;margin-bottom:32px}
-.login-cards{display:flex;flex-direction:column;gap:10px;width:100%;max-width:400px}
-.login-card{display:flex;align-items:center;gap:14px;padding:18px 16px;border-radius:var(--radius);border:1px solid var(--wolf-border);background:var(--wolf-charcoal);cursor:pointer;transition:all 0.18s;box-shadow:var(--shadow-wolf)}
-.login-card:active{transform:scale(0.97)}
-.login-card:hover{background:var(--wolf-slate)}
-.login-av{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.1rem;flex-shrink:0}
-.login-card.adam .login-av{background:var(--principal);color:var(--wolf-black)}
-.login-card.alivia .login-av{background:var(--director-rose);color:#fff}
-.login-card.chris .login-av{background:var(--director-em);color:#fff}
-.login-info{flex:1}
-.login-name{font-family:'Playfair Display',serif;font-weight:700;font-size:1.1rem;margin-bottom:3px}
-.login-card.adam .login-name{color:var(--wolf-gold-pale)}
-.login-card.alivia .login-name{color:#E99DB3}
-.login-card.chris .login-name{color:#8FC9A9}
-.login-role{font-family:'JetBrains Mono',monospace;font-size:0.5rem;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:var(--wolf-text-dim)}
+/* ── PORTAL (login flow) ── */
+#portal{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:calc(24px + env(safe-area-inset-top,0px)) 20px calc(24px + env(safe-area-inset-bottom,0px));position:relative}
+.portal-header{text-align:center;margin-bottom:28px;transition:all 0.3s ease}
+.portal-est{display:inline-flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:0.55rem;font-weight:500;letter-spacing:2.5px;text-transform:uppercase;color:var(--wolf-text-muted);margin-bottom:8px}
+.portal-est::before,.portal-est::after{content:'';width:20px;height:1px;background:var(--wolf-gold)}
+.portal-title{font-family:'Playfair Display',serif;font-weight:800;font-size:2.4rem;color:var(--wolf-gold-pale);margin-bottom:4px;line-height:1.1;transition:font-size 0.3s ease}
+.portal-sub{font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:3px;text-transform:uppercase;color:var(--wolf-text-gold);transition:color 0.3s ease}
+/* Stages */
+.portal-stage{width:100%;max-width:400px;display:none;flex-direction:column;gap:10px}
+#portal[data-state="identity"] .portal-stage[data-stage="identity"],
+#portal[data-state="persona"] .portal-stage[data-stage="persona"],
+#portal[data-state="auth"] .portal-stage[data-stage="persona"],
+#portal[data-state="loading"] .portal-stage[data-stage="loading"]{display:flex;animation:portalFadeIn 0.28s cubic-bezier(.2,.7,.2,1) both}
+@keyframes portalFadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+/* Cards */
+.portal-card{display:flex;align-items:center;gap:14px;padding:18px 16px;border-radius:var(--radius);border:1px solid var(--wolf-border);background:var(--wolf-charcoal);cursor:pointer;transition:background 0.18s ease,border-color 0.18s ease,transform 0.15s ease;box-shadow:var(--shadow-wolf)}
+.portal-card:active{transform:scale(0.97)}
+.portal-card:hover{background:var(--wolf-slate);border-color:var(--wolf-border-strong)}
+.portal-card.adam{border-color:rgba(212,175,55,0.3)}
+.portal-card.alivia{border-color:rgba(216,117,152,0.3)}
+.portal-card.chris{border-color:rgba(107,175,136,0.3)}
+.portal-av{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.1rem;flex-shrink:0}
+.portal-card.adam .portal-av{background:var(--principal);color:var(--wolf-black)}
+.portal-card.alivia .portal-av{background:var(--director-rose);color:#fff}
+.portal-card.chris .portal-av{background:var(--director-em);color:#fff}
+.portal-card-info{flex:1;min-width:0}
+.portal-card-name{font-family:'Playfair Display',serif;font-weight:700;font-size:1.1rem;margin-bottom:3px}
+.portal-card.adam .portal-card-name{color:var(--wolf-gold-pale)}
+.portal-card.alivia .portal-card-name{color:#E99DB3}
+.portal-card.chris .portal-card-name{color:#8FC9A9}
+.portal-card-role{font-family:'JetBrains Mono',monospace;font-size:0.5rem;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:var(--wolf-text-dim)}
+.portal-card-chev{font-size:0.8rem;transition:transform 0.15s ease}
+.portal-card.adam .portal-card-chev{color:var(--wolf-gold)}
+.portal-card.alivia .portal-card-chev{color:var(--director-rose)}
+.portal-card.chris .portal-card-chev{color:var(--director-em)}
+.portal-card:hover .portal-card-chev{transform:translateX(3px)}
+/* Persona card (stages 2+3) */
+.persona-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:20px 18px;border-radius:18px;border:1px solid var(--wolf-border-strong);background:var(--wolf-charcoal);box-shadow:var(--shadow-wolf)}
+.persona-av-wrap{width:72px;height:72px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.7rem;box-shadow:0 4px 24px rgba(0,0,0,0.4),0 0 0 3px var(--wolf-border-strong);animation:avatarPop 0.35s cubic-bezier(.2,.9,.3,1.3) both}
+@keyframes avatarPop{from{transform:scale(0.6);opacity:0}to{transform:scale(1);opacity:1}}
+.persona-av-wrap.adam{background:var(--principal);color:var(--wolf-black)}
+.persona-av-wrap.alivia{background:var(--director-rose);color:#fff}
+.persona-av-wrap.chris{background:var(--director-em);color:#fff}
+.persona-name-big{font-family:'Playfair Display',serif;font-weight:700;font-size:1.5rem;color:var(--wolf-gold-pale);text-align:center;line-height:1.1}
+.persona-role-line{font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:2px;text-transform:uppercase;color:var(--wolf-text-dim);text-align:center}
+.persona-auth-slot{width:100%;margin-top:8px;display:none;flex-direction:column;gap:8px}
+#portal[data-state="auth"] .persona-auth-slot{display:flex;animation:portalFadeIn 0.24s ease both}
+.persona-input{width:100%;padding:13px 16px;font-family:'Montserrat',sans-serif;font-size:0.9rem;background:var(--wolf-black);color:var(--wolf-text);border:1px solid var(--wolf-border);border-radius:12px;outline:none;transition:border-color 0.15s,box-shadow 0.15s}
+.persona-input:focus{border-color:var(--wolf-gold);box-shadow:0 0 0 3px rgba(212,175,55,0.12)}
+.persona-input.error{border-color:var(--wolf-danger);animation:shake 0.4s ease}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+.persona-error{min-height:16px;font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:1px;color:var(--wolf-danger);text-align:center;transition:opacity 0.2s;opacity:0}
+.persona-error.show{opacity:1}
+.persona-actions{display:flex;gap:8px;margin-top:4px}
+.persona-btn{flex:1;padding:13px;border-radius:12px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:0.72rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all 0.15s;border:1px solid var(--wolf-border);position:relative}
+.persona-btn:active:not(:disabled){transform:scale(0.97)}
+.persona-btn:disabled{opacity:0.55;cursor:not-allowed}
+.persona-btn.secondary{background:var(--wolf-slate);color:var(--wolf-text-dim)}
+.persona-btn.primary{flex:2;background:linear-gradient(135deg,var(--wolf-gold-bright),var(--wolf-gold-deep));color:var(--wolf-black);border-color:var(--wolf-gold)}
+.persona-btn .spinner{display:none;width:13px;height:13px;border:2px solid rgba(0,0,0,0.25);border-top-color:var(--wolf-black);border-radius:50%;animation:spin 0.7s linear infinite;margin-right:6px;vertical-align:-2px}
+.persona-btn.submitting .spinner{display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.persona-wrap.success{animation:successPulse 0.5s ease}
+@keyframes successPulse{0%{box-shadow:0 0 0 0 rgba(111,196,123,0.4),0 4px 24px rgba(0,0,0,0.4)}50%{box-shadow:0 0 0 12px rgba(111,196,123,0),0 4px 24px rgba(0,0,0,0.4)}100%{box-shadow:0 0 0 0 rgba(111,196,123,0),0 4px 24px rgba(0,0,0,0.4)}}
+/* Loading stage */
+.loading-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:24px 18px;border-radius:18px;border:1px solid var(--wolf-border);background:var(--wolf-charcoal)}
+.loading-ring{width:44px;height:44px;border:3px solid var(--wolf-border);border-top-color:var(--wolf-gold);border-radius:50%;animation:spin 0.9s linear infinite}
+.loading-text{font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:2.5px;text-transform:uppercase;color:var(--wolf-text-dim)}
+@media(prefers-reduced-motion:reduce){
+  .portal-stage[data-stage]{animation:none!important}
+  .persona-av-wrap,.persona-input,.persona-btn,.persona-wrap{animation:none!important;transition:none!important}
+  .loading-ring{animation:none}
+}
 
 /* HEADER */
 header{text-align:center;padding:20px 0 12px;position:relative}
@@ -325,41 +378,67 @@ body.role-adam .admin-nav{display:flex}
 </head>
 <body>
 
-<!-- LOGIN -->
-<div id="login">
-  <div class="login-est">Konopko Operations</div>
-  <div class="login-title">The Floor</div>
-  <div class="login-sub">Select your profile</div>
-  <div id="pwPrompt" style="display:none;width:100%;max-width:400px;margin-bottom:16px;padding:18px;border-radius:var(--radius);border:1px solid var(--wolf-border-strong);background:var(--wolf-charcoal);box-shadow:var(--shadow-wolf)">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-      <div class="login-av" id="pwAvatar" style="width:40px;height:40px;font-size:0.95rem"></div>
-      <div>
-        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:1.1rem" id="pwName">—</div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--wolf-text-dim);margin-top:2px">Enter password</div>
+<!-- PORTAL -->
+<div id="portal" data-state="identity">
+  <div class="portal-header">
+    <div class="portal-est">Konopko Operations</div>
+    <div class="portal-title" id="portalTitle">The Floor</div>
+    <div class="portal-sub" id="portalSub">Select your profile</div>
+  </div>
+
+  <!-- Stage 1: Identity -->
+  <div class="portal-stage" data-stage="identity">
+    <div class="portal-card adam" onclick="portalPick('adam')">
+      <div class="portal-av">A</div>
+      <div class="portal-card-info">
+        <div class="portal-card-name">Adam</div>
+        <div class="portal-card-role">Principal · Full Access</div>
       </div>
+      <i class="fa-solid fa-chevron-right portal-card-chev"></i>
     </div>
-    <input class="qa-input" type="password" id="pwInput" placeholder="Password" autocomplete="current-password" style="margin-bottom:8px" onkeydown="if(event.key==='Enter')submitLoginPassword()">
-    <div id="pwError" style="display:none;font-size:0.7rem;color:var(--wolf-danger);margin-bottom:8px;padding-left:2px"></div>
-    <div style="display:flex;gap:8px">
-      <button onclick="cancelLoginPassword()" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--wolf-border);background:var(--wolf-slate);color:var(--wolf-text-dim);font-weight:700;font-size:0.7rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer">Back</button>
-      <button onclick="submitLoginPassword()" style="flex:2;padding:12px;border-radius:10px;border:1px solid var(--wolf-gold);background:linear-gradient(135deg,var(--wolf-gold-bright),var(--wolf-gold-deep));color:var(--wolf-black);font-weight:700;font-size:0.7rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer">Sign In</button>
+    <div class="portal-card alivia" onclick="portalPick('alivia')">
+      <div class="portal-av">A</div>
+      <div class="portal-card-info">
+        <div class="portal-card-name">Alivia</div>
+        <div class="portal-card-role">Director · Kid Operations</div>
+      </div>
+      <i class="fa-solid fa-chevron-right portal-card-chev"></i>
+    </div>
+    <div class="portal-card chris" onclick="portalPick('chris')">
+      <div class="portal-av">C</div>
+      <div class="portal-card-info">
+        <div class="portal-card-name">Chris</div>
+        <div class="portal-card-role">Director · Konopko Overwatch</div>
+      </div>
+      <i class="fa-solid fa-chevron-right portal-card-chev"></i>
     </div>
   </div>
-  <div id="loginCards" class="login-cards">
-    <div class="login-card adam" onclick="selectUser('adam')">
-      <div class="login-av">A</div>
-      <div class="login-info"><div class="login-name">Adam</div><div class="login-role">Principal · Full Access</div></div>
-      <i class="fa-solid fa-chevron-right" style="color:var(--wolf-gold)"></i>
+
+  <!-- Stage 2+3: Persona (name + optional password) -->
+  <div class="portal-stage" data-stage="persona">
+    <div class="persona-wrap" id="personaWrap">
+      <div class="persona-av-wrap" id="personaAv"></div>
+      <div class="persona-name-big" id="personaName">—</div>
+      <div class="persona-role-line" id="personaRole">—</div>
+
+      <div class="persona-auth-slot">
+        <input class="persona-input" type="password" id="pwInput" placeholder="Enter password" autocomplete="current-password" onkeydown="portalKeydown(event)" onfocus="portalClearError()">
+        <div class="persona-error" id="pwError"></div>
+      </div>
+
+      <div class="persona-actions">
+        <button class="persona-btn secondary" onclick="portalBack()" id="portalBackBtn"><span class="btn-label">Back</span></button>
+        <button class="persona-btn primary" onclick="portalSubmit()" id="portalSubmitBtn"><span class="spinner"></span><span class="btn-label">Sign In</span></button>
+      </div>
     </div>
-    <div class="login-card alivia" onclick="selectUser('alivia')">
-      <div class="login-av">A</div>
-      <div class="login-info"><div class="login-name">Alivia</div><div class="login-role">Director · Kid Operations</div></div>
-      <i class="fa-solid fa-chevron-right" style="color:var(--director-rose)"></i>
-    </div>
-    <div class="login-card chris" onclick="selectUser('chris')">
-      <div class="login-av">C</div>
-      <div class="login-info"><div class="login-name">Chris</div><div class="login-role">Director · Konopko Overwatch</div></div>
-      <i class="fa-solid fa-chevron-right" style="color:var(--director-em)"></i>
+  </div>
+
+  <!-- Stage 4: Loading -->
+  <div class="portal-stage" data-stage="loading">
+    <div class="loading-wrap">
+      <div class="persona-av-wrap" id="loadingAv"></div>
+      <div class="loading-ring"></div>
+      <div class="loading-text" id="loadingText">Loading your space…</div>
     </div>
   </div>
 </div>
@@ -973,7 +1052,11 @@ setInterval(updateClock, 1000);
 updateClock();
 
 // Auth
-// Auth helpers — SHA-256 with user_key salt via Web Crypto
+// ═══ AUTH STATE MACHINE (portal) ═══
+// States: identity | persona | auth | loading | app
+// Selected user data flows through a single portalState object.
+// setPortalState() re-renders the UI from state; no ad-hoc DOM manipulation.
+
 async function hashPassword(userKey, password){
   const enc = new TextEncoder();
   const data = enc.encode((userKey||'') + ':floor:' + (password||''));
@@ -981,79 +1064,183 @@ async function hashPassword(userKey, password){
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
-let pendingLoginUser = null;
+const portalState = {
+  stage: 'identity',      // identity | persona | auth | loading
+  selected: null,         // user_key
+  member: null,           // loaded row from floor_members
+  submitting: false,      // lock prevents double-submission
+  error: null
+};
 
-async function selectUser(key){
-  // Check if this member has a password set
-  try{
-    const { data } = await sb.from('floor_members').select('password_hash, display_name, first_name').eq('user_key', key).single();
-    if(data && data.password_hash){
-      pendingLoginUser = { key, member: data };
-      showPasswordPrompt(key, data);
-      return;
+function setPortalState(patch){
+  Object.assign(portalState, patch);
+  renderPortal();
+}
+
+function renderPortal(){
+  const portal = document.getElementById('portal');
+  if(!portal) return;
+  portal.dataset.state = portalState.stage;
+
+  // Header text adapts by stage
+  const title = document.getElementById('portalTitle');
+  const sub = document.getElementById('portalSub');
+  if(portalState.stage === 'identity'){
+    title.textContent = 'The Floor';
+    sub.textContent = 'Select your profile';
+  } else if(portalState.stage === 'persona' || portalState.stage === 'auth'){
+    title.textContent = 'The Floor';
+    sub.textContent = portalState.stage === 'auth' ? 'Enter your password' : 'Welcome back';
+  } else if(portalState.stage === 'loading'){
+    title.textContent = 'The Floor';
+    sub.textContent = 'Entering your space';
+  }
+
+  // Persona stage visuals
+  if(portalState.selected && (portalState.stage === 'persona' || portalState.stage === 'auth')){
+    const mem = MEMBERS[portalState.selected] || {};
+    const m = portalState.member || {};
+    const av = document.getElementById('personaAv');
+    const name = document.getElementById('personaName');
+    const role = document.getElementById('personaRole');
+    const wrap = document.getElementById('personaWrap');
+    av.className = 'persona-av-wrap ' + (mem.cls || '');
+    av.textContent = ((m.display_name || m.first_name || portalState.selected)[0] || '?').toUpperCase();
+    name.textContent = m.display_name || m.first_name || mem.name || portalState.selected;
+    role.textContent = m.title || mem.role || '—';
+    wrap.classList.remove('success');
+  }
+
+  // Loading stage avatar mirror
+  if(portalState.stage === 'loading' && portalState.selected){
+    const mem = MEMBERS[portalState.selected] || {};
+    const m = portalState.member || {};
+    const av = document.getElementById('loadingAv');
+    av.className = 'persona-av-wrap ' + (mem.cls || '');
+    av.textContent = ((m.display_name || m.first_name || portalState.selected)[0] || '?').toUpperCase();
+    document.getElementById('loadingText').textContent = 'Loading ' + (m.display_name || mem.name || portalState.selected) + '\'s space…';
+  }
+
+  // Error display
+  const errEl = document.getElementById('pwError');
+  const inputEl = document.getElementById('pwInput');
+  if(errEl && inputEl){
+    if(portalState.error){
+      errEl.textContent = portalState.error;
+      errEl.classList.add('show');
+      inputEl.classList.add('error');
+    } else {
+      errEl.classList.remove('show');
+      inputEl.classList.remove('error');
     }
-  }catch(e){ /* no member row or column — fall through */ }
-  await finishLogin(key);
+  }
+
+  // Submit button state
+  const submitBtn = document.getElementById('portalSubmitBtn');
+  const backBtn = document.getElementById('portalBackBtn');
+  if(submitBtn && backBtn){
+    submitBtn.disabled = portalState.submitting;
+    backBtn.disabled = portalState.submitting;
+    submitBtn.classList.toggle('submitting', portalState.submitting);
+    submitBtn.querySelector('.btn-label').textContent = portalState.submitting ? 'Signing in' : 'Sign In';
+  }
+
+  // Focus password input when auth stage opens
+  if(portalState.stage === 'auth' && inputEl){
+    setTimeout(()=>{ try{ inputEl.focus(); }catch(_){} }, 80);
+  }
 }
 
-function showPasswordPrompt(key, member){
-  const prompt = document.getElementById('pwPrompt');
-  const cards = document.getElementById('loginCards');
-  if(!prompt || !cards) return;
-  const mem = MEMBERS[key] || {};
-  const av = document.getElementById('pwAvatar');
-  av.textContent = ((member.display_name||member.first_name||key)[0]||'?').toUpperCase();
-  const bg = mem.cls==='adam' ? 'var(--principal)' : mem.cls==='alivia' ? 'var(--director-rose)' : mem.cls==='chris' ? 'var(--director-em)' : 'var(--wolf-gold)';
-  av.style.background = bg;
-  av.style.color = mem.cls==='adam' ? 'var(--wolf-black)' : '#fff';
-  document.getElementById('pwName').textContent = member.display_name || member.first_name || key;
-  document.getElementById('pwInput').value = '';
-  document.getElementById('pwError').style.display = 'none';
-  cards.style.display = 'none';
-  prompt.style.display = 'block';
-  setTimeout(()=>{ const inp = document.getElementById('pwInput'); if(inp) inp.focus(); }, 100);
+// Tap a portal card
+async function portalPick(key){
+  if(portalState.submitting) return;
+  setPortalState({ stage: 'persona', selected: key, member: null, error: null });
+
+  // Fetch member in background — if they have a password, transition to auth
+  try{
+    const { data } = await sb.from('floor_members').select('password_hash, display_name, first_name, title').eq('user_key', key).single();
+    setPortalState({ member: data || {} });
+    if(data && data.password_hash){
+      // Brief pause so the persona card is visible before the input slides in
+      setTimeout(()=>{
+        if(portalState.selected === key && portalState.stage === 'persona'){
+          setPortalState({ stage: 'auth' });
+        }
+      }, 320);
+    } else {
+      // No password — straight to loading
+      setTimeout(()=>{
+        if(portalState.selected === key) finishLogin(key);
+      }, 450);
+    }
+  }catch(e){
+    // Member row missing — still try a passwordless login
+    setTimeout(()=>{ if(portalState.selected === key) finishLogin(key); }, 450);
+  }
 }
 
-function cancelLoginPassword(){
-  pendingLoginUser = null;
-  document.getElementById('pwPrompt').style.display = 'none';
-  document.getElementById('loginCards').style.display = '';
+function portalBack(){
+  if(portalState.submitting) return;
+  setPortalState({ stage: 'identity', selected: null, member: null, error: null });
+  const inp = document.getElementById('pwInput');
+  if(inp) inp.value = '';
 }
 
-async function submitLoginPassword(){
-  if(!pendingLoginUser) return;
-  const pw = (document.getElementById('pwInput').value||'').trim();
-  const err = document.getElementById('pwError');
-  if(!pw){ err.textContent = 'Enter your password'; err.style.display = 'block'; return; }
-  const attempted = await hashPassword(pendingLoginUser.key, pw);
-  if(attempted === pendingLoginUser.member.password_hash){
-    const key = pendingLoginUser.key;
-    cancelLoginPassword();
-    await finishLogin(key);
+function portalClearError(){
+  if(portalState.error) setPortalState({ error: null });
+}
+
+function portalKeydown(e){
+  if(e.key === 'Enter'){ e.preventDefault(); portalSubmit(); }
+  else if(e.key === 'Escape'){ e.preventDefault(); portalBack(); }
+}
+
+async function portalSubmit(){
+  if(portalState.submitting || portalState.stage !== 'auth') return;
+  const input = document.getElementById('pwInput');
+  const pw = (input.value || '').trim();
+  if(!pw){ setPortalState({ error: 'Enter your password' }); return; }
+
+  setPortalState({ submitting: true, error: null });
+  const hashed = await hashPassword(portalState.selected, pw);
+  const correct = portalState.member && hashed === portalState.member.password_hash;
+
+  if(correct){
+    // Success flash before transition
+    const wrap = document.getElementById('personaWrap');
+    if(wrap) wrap.classList.add('success');
+    setTimeout(()=>{ finishLogin(portalState.selected); }, 300);
   } else {
-    err.textContent = 'Incorrect password';
-    err.style.display = 'block';
-    document.getElementById('pwInput').value = '';
+    setPortalState({ submitting: false, error: 'Incorrect password' });
+    input.value = '';
+    setTimeout(()=>{ try{ input.focus(); }catch(_){} }, 50);
   }
 }
 
 async function finishLogin(key){
+  setPortalState({ stage: 'loading', submitting: false });
   currentUser = key;
   localStorage.setItem('floor_user', key);
   localStorage.setItem('floor_session_valid', '1');
-  document.getElementById('login').style.display = 'none';
-  document.getElementById('main-app').style.display = 'block';
   document.body.className = 'role-' + key;
   setupHeader();
   if(loadKaleesiCreds()){
-    await loadKaleesiSchedule();
+    try{ await loadKaleesiSchedule(); }catch(_){}
     renderKaleesiDayBadge();
     renderKaleesiStatus();
   }
-  await loadAll();
+  try{ await loadAll(); }catch(e){ console.error('loadAll:', e); }
   subscribeRealtime();
   runRecurringEngine();
+  // Reveal app
+  document.getElementById('portal').style.display = 'none';
+  document.getElementById('main-app').style.display = 'block';
+  // Reset portal state for next sign-out (keep selected so header still makes sense if sign-in fails)
+  Object.assign(portalState, { submitting: false, error: null });
 }
+
+// Legacy shim so existing code that calls selectUser() still works
+function selectUser(key){ portalPick(key); }
 
 function signOut(){
   if(clockTimer) clearInterval(clockTimer);
@@ -1062,8 +1249,11 @@ function signOut(){
   localStorage.removeItem('floor_user');
   localStorage.removeItem('floor_session_valid');
   document.getElementById('main-app').style.display = 'none';
-  document.getElementById('login').style.display = '';
+  document.getElementById('portal').style.display = '';
   document.body.className = '';
+  setPortalState({ stage: 'identity', selected: null, member: null, submitting: false, error: null });
+  const inp = document.getElementById('pwInput');
+  if(inp) inp.value = '';
 }
 
 function setupHeader(){
@@ -2080,12 +2270,19 @@ function emptyHTML(icon, title, sub){
 }
 
 // AUTO-LOGIN — bypass password if session is already valid
-(function(){
+(async function autoLogin(){
   const saved = localStorage.getItem('floor_user');
   const sessionOk = localStorage.getItem('floor_session_valid') === '1';
-  if(saved && MEMBERS[saved]){
-    if(sessionOk) finishLogin(saved);
-    else selectUser(saved); // will re-prompt for password if set
+  if(!saved || !MEMBERS[saved]) return;
+  if(sessionOk){
+    // Pre-fetch member data so the loading stage can personalize
+    try{
+      const { data } = await sb.from('floor_members').select('display_name, first_name, title').eq('user_key', saved).single();
+      setPortalState({ selected: saved, member: data || {} });
+    }catch(_){}
+    finishLogin(saved);
+  } else {
+    portalPick(saved);
   }
 })();
 </script>
