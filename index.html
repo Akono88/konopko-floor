@@ -752,6 +752,13 @@ body.role-adam .admin-nav{display:flex}
     <div class="qa-section-label">Notes</div>
     <textarea class="qa-textarea" id="memNotes" placeholder="Background notes, arrangements, etc."></textarea>
 
+    <div class="qa-section-label">Sign-In Link</div>
+    <div id="memSigninLink" style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;letter-spacing:0.3px;color:var(--wolf-gold);padding:10px 12px;background:var(--wolf-slate);border:1px solid var(--wolf-border);border-radius:10px;margin-bottom:8px;word-break:break-all">—</div>
+    <div class="qa-row" style="margin-bottom:12px">
+      <button type="button" onclick="copyMemberLink()" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--wolf-border-strong);background:var(--wolf-gold-whisper);color:var(--wolf-gold);font-family:'Montserrat',sans-serif;font-weight:700;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer"><i class="fa-solid fa-link"></i> Copy Link</button>
+      <button type="button" onclick="shareMemberLink()" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--wolf-border);background:var(--wolf-slate);color:var(--wolf-text-dim);font-family:'Montserrat',sans-serif;font-weight:700;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer"><i class="fa-solid fa-share-nodes"></i> Share</button>
+    </div>
+
     <div class="qa-actions">
       <button class="qa-btn" id="memRemoveBtn" onclick="removeMember()" style="flex:1;color:var(--wolf-danger);border-color:var(--wolf-danger)">Remove</button>
       <button class="qa-btn" onclick="closeMemberEdit()">Cancel</button>
@@ -1222,6 +1229,7 @@ async function finishLogin(key){
   currentUser = key;
   localStorage.setItem('floor_user', key);
   localStorage.setItem('floor_session_valid', '1');
+  updateUrlForUser(key);
   document.body.className = 'role-' + key;
   setupHeader();
   if(loadKaleesiCreds()){
@@ -1248,6 +1256,8 @@ function signOut(){
   currentUser = null;
   localStorage.removeItem('floor_user');
   localStorage.removeItem('floor_session_valid');
+  // Strip the ?user= param so signing back in doesn't auto-select the last user
+  try{ const url = new URL(window.location.href); url.searchParams.delete('user'); history.replaceState(null,'',url.toString()); }catch(_){}
   document.getElementById('main-app').style.display = 'none';
   document.getElementById('portal').style.display = '';
   document.body.className = '';
@@ -2035,6 +2045,17 @@ function openMemberEdit(userKey){
   // Hide remove for principal / new
   document.getElementById('memRemoveBtn').style.display = (isNew || m.is_principal) ? 'none' : '';
 
+  // Sign-in link
+  const linkEl = document.getElementById('memSigninLink');
+  if(linkEl){
+    if(userKey){
+      const origin = window.location.origin + window.location.pathname;
+      linkEl.textContent = origin + '?user=' + userKey;
+    } else {
+      linkEl.textContent = 'Save member first — link will appear here.';
+    }
+  }
+
   // Password status
   document.getElementById('memPassword').value = '';
   const pwStatus = document.getElementById('memPasswordStatus');
@@ -2064,6 +2085,52 @@ async function loadRolesForPicker(){
 }
 
 function closeMemberEdit(){ document.getElementById('memberModal').classList.remove('open'); }
+
+function memberSigninUrl(){
+  if(!editingMemberKey) return null;
+  return window.location.origin + window.location.pathname + '?user=' + editingMemberKey;
+}
+
+async function copyMemberLink(){
+  const url = memberSigninUrl();
+  if(!url){ showToast('Save member first','error'); return; }
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(url);
+      showToast('Link copied ✓');
+    } else {
+      // Fallback for older browsers / non-https
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('Link copied ✓');
+    }
+  }catch(e){ showToast('Copy failed','error'); }
+}
+
+async function shareMemberLink(){
+  const url = memberSigninUrl();
+  if(!url){ showToast('Save member first','error'); return; }
+  const name = (window.__members || []).find(m => m.user_key === editingMemberKey)?.display_name || editingMemberKey;
+  const payload = {
+    title: 'The Floor · sign-in',
+    text: `${name}, tap this to open The Floor. Install it to your home screen from there.`,
+    url
+  };
+  try{
+    if(navigator.share){
+      await navigator.share(payload);
+    } else {
+      // No native share — fall through to copy
+      await copyMemberLink();
+    }
+  }catch(e){
+    if(e && e.name !== 'AbortError') showToast('Share failed','error');
+  }
+}
 
 function toggleMemPill(el, group){
   const sel = `.qa-pill[data-${group}]`;
@@ -2269,13 +2336,49 @@ function emptyHTML(icon, title, sub){
   return `<div class="empty-state"><div class="es-icon">${icon}</div><div class="es-title">${title}</div>${sub?`<div class="es-sub">${sub}</div>`:''}</div>`;
 }
 
-// AUTO-LOGIN — bypass password if session is already valid
+// URL-based profile targeting (?user=adam|alivia|chris)
+function getUrlUser(){
+  try{
+    const p = new URLSearchParams(window.location.search);
+    const u = (p.get('user')||'').toLowerCase();
+    return MEMBERS[u] ? u : null;
+  }catch(_){ return null; }
+}
+
+function updateUrlForUser(key){
+  try{
+    const url = new URL(window.location.href);
+    url.searchParams.set('user', key);
+    history.replaceState(null, '', url.toString());
+  }catch(_){}
+}
+
+// AUTO-LOGIN — URL param overrides saved session; session bypasses password
 (async function autoLogin(){
+  const urlUser = getUrlUser();
   const saved = localStorage.getItem('floor_user');
   const sessionOk = localStorage.getItem('floor_session_valid') === '1';
+
+  // URL param wins. If it matches saved + session valid → skip to app.
+  // If it differs from saved → drop the stale session and prompt for password.
+  if(urlUser){
+    if(urlUser === saved && sessionOk){
+      try{
+        const { data } = await sb.from('floor_members').select('display_name, first_name, title').eq('user_key', urlUser).single();
+        setPortalState({ selected: urlUser, member: data || {} });
+      }catch(_){}
+      finishLogin(urlUser);
+    } else {
+      // Different user in URL, or no session — run the portal select flow
+      localStorage.removeItem('floor_session_valid');
+      portalPick(urlUser);
+    }
+    return;
+  }
+
+  // No URL param — fall back to saved session
   if(!saved || !MEMBERS[saved]) return;
   if(sessionOk){
-    // Pre-fetch member data so the loading stage can personalize
     try{
       const { data } = await sb.from('floor_members').select('display_name, first_name, title').eq('user_key', saved).single();
       setPortalState({ selected: saved, member: data || {} });
