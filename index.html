@@ -11,6 +11,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="The Floor">
 <link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-192.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230B0B0D'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='%23D4AF37' font-family='Georgia,serif' font-weight='700'>F</text></svg>">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -30,13 +32,20 @@
   --radius:14px;--shadow-wolf:0 4px 24px rgba(0,0,0,0.45),0 0 0 1px var(--wolf-border);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-font-smoothing:antialiased}
-body{font-family:'Montserrat',system-ui,sans-serif;background:var(--wolf-black);color:var(--wolf-text);min-height:100vh;padding:0 0 80px;
+html{-webkit-text-size-adjust:100%}
+body{font-family:'Montserrat',system-ui,sans-serif;background:var(--wolf-black);color:var(--wolf-text);min-height:100vh;
+  padding:0 0 calc(80px + env(safe-area-inset-bottom,0px));
   background-image:radial-gradient(ellipse at 15% 0%,rgba(212,175,55,0.12) 0%,transparent 55%),radial-gradient(ellipse at 85% 10%,rgba(139,111,63,0.1) 0%,transparent 45%);
-  background-attachment:fixed}
+  background-attachment:fixed;
+  overscroll-behavior-y:contain}
 .app{max-width:520px;margin:0 auto;padding:0 16px}
+/* PWA standalone-specific tweaks */
+@media all and (display-mode:standalone){
+  body{padding-top:env(safe-area-inset-top,0px)}
+}
 
 /* LOGIN */
-#login{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px}
+#login{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:calc(24px + env(safe-area-inset-top,0px)) 20px calc(24px + env(safe-area-inset-bottom,0px))}
 .login-est{display:inline-flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:0.55rem;font-weight:500;letter-spacing:2.5px;text-transform:uppercase;color:var(--wolf-text-muted);margin-bottom:8px}
 .login-est::before,.login-est::after{content:'';width:20px;height:1px;background:var(--wolf-gold)}
 .login-title{font-family:'Playfair Display',serif;font-weight:800;font-size:2.4rem;color:var(--wolf-gold-pale);text-align:center;margin-bottom:4px;line-height:1.1}
@@ -236,8 +245,8 @@ header .clock{margin-top:6px;font-size:0.62rem;color:var(--wolf-text-dim);font-w
 .view-all-link{display:block;width:100%;margin-top:8px;padding:10px 12px;background:var(--wolf-slate);border:1px solid var(--wolf-border);border-radius:8px;color:var(--wolf-gold);cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:0.58rem;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;text-align:center}
 
 /* FAB & NAV */
-.fab{position:fixed;bottom:76px;right:20px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--wolf-gold-bright),var(--wolf-gold-deep));color:var(--wolf-black);border:none;font-size:1.3rem;cursor:pointer;z-index:30;box-shadow:0 6px 24px rgba(212,175,55,0.5);display:flex;align-items:center;justify-content:center}
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--wolf-black);border-top:1px solid var(--wolf-border-strong);display:flex;z-index:50;max-width:520px;margin:0 auto}
+.fab{position:fixed;bottom:calc(76px + env(safe-area-inset-bottom,0px));right:20px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--wolf-gold-bright),var(--wolf-gold-deep));color:var(--wolf-black);border:none;font-size:1.3rem;cursor:pointer;z-index:30;box-shadow:0 6px 24px rgba(212,175,55,0.5);display:flex;align-items:center;justify-content:center}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--wolf-black);border-top:1px solid var(--wolf-border-strong);display:flex;z-index:50;max-width:520px;margin:0 auto;padding-bottom:env(safe-area-inset-bottom,0px)}
 .nav-btn{flex:1;border:none;background:none;padding:10px 2px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--wolf-text-muted);transition:color 0.15s}
 .nav-btn i{font-size:15px}
 .nav-btn span{font-family:'JetBrains Mono',monospace;font-size:0.46rem;font-weight:500;letter-spacing:1.2px;text-transform:uppercase}
@@ -289,6 +298,12 @@ body.role-adam .admin-nav{display:flex}
 .sub-head{font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:2.5px;text-transform:uppercase;color:var(--wolf-gold);margin:14px 0 4px;padding:0 4px 4px;border-bottom:1px solid var(--wolf-border);display:flex;align-items:center;justify-content:space-between}
 .sub-head:first-child{margin-top:0}
 
+/* iPad portrait — enlarge cards a bit, keep bottom nav */
+@media(min-width:640px) and (max-width:899px){
+  .app{max-width:640px;padding:0 20px}
+  .hero-name{font-size:2rem}
+  .quicklog-btn .ql-icon{font-size:1.4rem}
+}
 @media(min-width:900px){
   body{padding-bottom:0}
   .app{max-width:1280px;padding:16px 24px 40px}
@@ -728,16 +743,16 @@ const SUPA_URL = 'https://pvxlouqzmwdcrvmnfqfu.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2eGxvdXF6bXdkY3J2bW5mcWZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2MjY0MzIsImV4cCI6MjA5MjIwMjQzMn0.q22RcLEhswJ_82BovoxBfOJFgMCPfz-cSbU0M9JlJew';
 const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
 
-// PWA: service worker + install prompt
+// PWA: service worker + install prompt + iOS-aware detection
 let deferredInstall = null;
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+const IS_STANDALONE = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').catch(e=>console.warn('SW:',e));
 }
 window.addEventListener('beforeinstallprompt', (e)=>{
   e.preventDefault();
   deferredInstall = e;
-  const el = document.getElementById('installBtn');
-  if(el){ el.style.display='block'; }
 });
 window.addEventListener('appinstalled', ()=>{
   deferredInstall = null;
@@ -746,15 +761,26 @@ window.addEventListener('appinstalled', ()=>{
   const btn = document.getElementById('installBtn');
   if(btn) btn.style.display='none';
 });
+function refreshInstallUI(){
+  const btn = document.getElementById('installBtn');
+  const status = document.getElementById('installStatus');
+  if(!btn || !status) return;
+  if(IS_STANDALONE){ btn.style.display='none'; status.textContent='Installed ✓'; status.style.color='var(--wolf-success)'; return; }
+  if(IS_IOS){ btn.textContent='How'; status.textContent='iPhone: Share → Add to Home Screen'; return; }
+  if(deferredInstall){ btn.textContent='Install'; status.textContent='Tap to add to home screen'; return; }
+  btn.textContent='How'; status.textContent='Open browser menu → Install';
+}
 async function installApp(){
   if(deferredInstall){
     deferredInstall.prompt();
-    const { outcome } = await deferredInstall.userChoice;
-    if(outcome==='accepted') showToast('Installing…');
+    try{ const { outcome } = await deferredInstall.userChoice; if(outcome==='accepted') showToast('Installing…'); }catch(_){}
     deferredInstall = null;
+    return;
+  }
+  if(IS_IOS){
+    alert('To install The Floor on your iPhone:\n\n1. Tap the Share button (square with arrow) at the bottom of Safari\n2. Scroll down and tap "Add to Home Screen"\n3. Tap Add in the top-right corner\n\nThen open the icon from your home screen.');
   } else {
-    // iOS manual instructions
-    showToast('iPhone: Share → Add to Home Screen');
+    alert('To install The Floor:\n\n1. Open your browser menu (⋮ or ⋯)\n2. Look for "Install app" or "Add to Home Screen"\n3. Confirm the install');
   }
 }
 
@@ -922,6 +948,7 @@ async function selectUser(key){
 
 function signOut(){
   if(clockTimer) clearInterval(clockTimer);
+  unsubscribeRealtime();
   currentUser = null;
   localStorage.removeItem('floor_user');
   document.getElementById('main-app').style.display = 'none';
@@ -951,13 +978,15 @@ function setupHeader(){
 
 async function loadAll(){
   await Promise.all([loadHome(), loadTasks(), loadRequests(), loadShifts(), loadMessages(), loadCalendar(), loadVault(), loadShopping(), loadNotes()]);
-  if(currentUser === 'adam') loadAdmin();
+  if(currentUser === 'adam'){ await loadAdmin(); refreshInstallUI(); }
 }
 
 // Realtime
+let realtimeChannel = null;
 function subscribeRealtime(){
   try{
-    sb.channel('floor-main')
+    if(realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel = null; }
+    realtimeChannel = sb.channel('floor-main')
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_tasks'},()=>{loadTasks();loadHome()})
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_messages'},()=>loadMessages())
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_requests'},()=>{loadRequests();loadHome()})
@@ -968,6 +997,9 @@ function subscribeRealtime(){
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_events'},()=>loadCalendar())
       .subscribe();
   }catch(e){ console.error('realtime',e); }
+}
+function unsubscribeRealtime(){
+  try{ if(realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel = null; } }catch(e){}
 }
 
 // Tab switching
