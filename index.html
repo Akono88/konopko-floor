@@ -330,7 +330,22 @@ body.role-adam .admin-nav{display:flex}
   <div class="login-est">Konopko Operations</div>
   <div class="login-title">The Floor</div>
   <div class="login-sub">Select your profile</div>
-  <div class="login-cards">
+  <div id="pwPrompt" style="display:none;width:100%;max-width:400px;margin-bottom:16px;padding:18px;border-radius:var(--radius);border:1px solid var(--wolf-border-strong);background:var(--wolf-charcoal);box-shadow:var(--shadow-wolf)">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <div class="login-av" id="pwAvatar" style="width:40px;height:40px;font-size:0.95rem"></div>
+      <div>
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:1.1rem" id="pwName">—</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--wolf-text-dim);margin-top:2px">Enter password</div>
+      </div>
+    </div>
+    <input class="qa-input" type="password" id="pwInput" placeholder="Password" autocomplete="current-password" style="margin-bottom:8px" onkeydown="if(event.key==='Enter')submitLoginPassword()">
+    <div id="pwError" style="display:none;font-size:0.7rem;color:var(--wolf-danger);margin-bottom:8px;padding-left:2px"></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="cancelLoginPassword()" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--wolf-border);background:var(--wolf-slate);color:var(--wolf-text-dim);font-weight:700;font-size:0.7rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer">Back</button>
+      <button onclick="submitLoginPassword()" style="flex:2;padding:12px;border-radius:10px;border:1px solid var(--wolf-gold);background:linear-gradient(135deg,var(--wolf-gold-bright),var(--wolf-gold-deep));color:var(--wolf-black);font-weight:700;font-size:0.7rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer">Sign In</button>
+    </div>
+  </div>
+  <div id="loginCards" class="login-cards">
     <div class="login-card adam" onclick="selectUser('adam')">
       <div class="login-av">A</div>
       <div class="login-info"><div class="login-name">Adam</div><div class="login-role">Principal · Full Access</div></div>
@@ -645,6 +660,16 @@ body.role-adam .admin-nav{display:flex}
       <span class="qa-pill" data-status="inactive" onclick="toggleMemPill(this,'status')">Inactive</span>
     </div>
 
+    <div class="qa-section-label">Password</div>
+    <div id="memPasswordStatus" style="font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:1.2px;text-transform:uppercase;color:var(--wolf-text-muted);margin-bottom:6px;padding-left:2px"></div>
+    <div class="qa-row">
+      <input class="qa-input" type="password" id="memPassword" placeholder="Leave blank to keep unchanged" autocomplete="new-password" style="margin-bottom:0;flex:1">
+      <button type="button" onclick="clearMemberPassword()" style="padding:0 14px;border-radius:10px;border:1px solid var(--wolf-border);background:var(--wolf-slate);color:var(--wolf-text-muted);font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:1.2px;text-transform:uppercase;cursor:pointer">Clear</button>
+    </div>
+    <div style="font-size:0.68rem;color:var(--wolf-text-muted);line-height:1.4;margin-bottom:8px;padding:8px 12px;background:var(--wolf-slate);border-radius:8px;border-left:2px solid var(--wolf-gold);margin-top:4px">
+      <strong style="color:var(--wolf-gold-pale)">Admin note:</strong> setting a password requires members to enter it on login. Leave blank on existing members to keep their current password.
+    </div>
+
     <div class="qa-section-label">Notes</div>
     <textarea class="qa-textarea" id="memNotes" placeholder="Background notes, arrangements, etc."></textarea>
 
@@ -948,14 +973,78 @@ setInterval(updateClock, 1000);
 updateClock();
 
 // Auth
+// Auth helpers — SHA-256 with user_key salt via Web Crypto
+async function hashPassword(userKey, password){
+  const enc = new TextEncoder();
+  const data = enc.encode((userKey||'') + ':floor:' + (password||''));
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+let pendingLoginUser = null;
+
 async function selectUser(key){
+  // Check if this member has a password set
+  try{
+    const { data } = await sb.from('floor_members').select('password_hash, display_name, first_name').eq('user_key', key).single();
+    if(data && data.password_hash){
+      pendingLoginUser = { key, member: data };
+      showPasswordPrompt(key, data);
+      return;
+    }
+  }catch(e){ /* no member row or column — fall through */ }
+  await finishLogin(key);
+}
+
+function showPasswordPrompt(key, member){
+  const prompt = document.getElementById('pwPrompt');
+  const cards = document.getElementById('loginCards');
+  if(!prompt || !cards) return;
+  const mem = MEMBERS[key] || {};
+  const av = document.getElementById('pwAvatar');
+  av.textContent = ((member.display_name||member.first_name||key)[0]||'?').toUpperCase();
+  const bg = mem.cls==='adam' ? 'var(--principal)' : mem.cls==='alivia' ? 'var(--director-rose)' : mem.cls==='chris' ? 'var(--director-em)' : 'var(--wolf-gold)';
+  av.style.background = bg;
+  av.style.color = mem.cls==='adam' ? 'var(--wolf-black)' : '#fff';
+  document.getElementById('pwName').textContent = member.display_name || member.first_name || key;
+  document.getElementById('pwInput').value = '';
+  document.getElementById('pwError').style.display = 'none';
+  cards.style.display = 'none';
+  prompt.style.display = 'block';
+  setTimeout(()=>{ const inp = document.getElementById('pwInput'); if(inp) inp.focus(); }, 100);
+}
+
+function cancelLoginPassword(){
+  pendingLoginUser = null;
+  document.getElementById('pwPrompt').style.display = 'none';
+  document.getElementById('loginCards').style.display = '';
+}
+
+async function submitLoginPassword(){
+  if(!pendingLoginUser) return;
+  const pw = (document.getElementById('pwInput').value||'').trim();
+  const err = document.getElementById('pwError');
+  if(!pw){ err.textContent = 'Enter your password'; err.style.display = 'block'; return; }
+  const attempted = await hashPassword(pendingLoginUser.key, pw);
+  if(attempted === pendingLoginUser.member.password_hash){
+    const key = pendingLoginUser.key;
+    cancelLoginPassword();
+    await finishLogin(key);
+  } else {
+    err.textContent = 'Incorrect password';
+    err.style.display = 'block';
+    document.getElementById('pwInput').value = '';
+  }
+}
+
+async function finishLogin(key){
   currentUser = key;
   localStorage.setItem('floor_user', key);
+  localStorage.setItem('floor_session_valid', '1');
   document.getElementById('login').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
   document.body.className = 'role-' + key;
   setupHeader();
-  // Kaleesi bridge
   if(loadKaleesiCreds()){
     await loadKaleesiSchedule();
     renderKaleesiDayBadge();
@@ -963,7 +1052,6 @@ async function selectUser(key){
   }
   await loadAll();
   subscribeRealtime();
-  // Post-load automations
   runRecurringEngine();
 }
 
@@ -972,6 +1060,7 @@ function signOut(){
   unsubscribeRealtime();
   currentUser = null;
   localStorage.removeItem('floor_user');
+  localStorage.removeItem('floor_session_valid');
   document.getElementById('main-app').style.display = 'none';
   document.getElementById('login').style.display = '';
   document.body.className = '';
@@ -1756,6 +1845,15 @@ function openMemberEdit(userKey){
   // Hide remove for principal / new
   document.getElementById('memRemoveBtn').style.display = (isNew || m.is_principal) ? 'none' : '';
 
+  // Password status
+  document.getElementById('memPassword').value = '';
+  const pwStatus = document.getElementById('memPasswordStatus');
+  if(pwStatus){
+    if(m.password_hash){ pwStatus.textContent = '🔒 Password set'; pwStatus.style.color = 'var(--wolf-success)'; }
+    else { pwStatus.textContent = '🔓 No password (direct login)'; pwStatus.style.color = 'var(--wolf-text-muted)'; }
+  }
+  window.__memPasswordAction = 'keep'; // keep | set | clear
+
   // Status pills
   document.querySelectorAll('.qa-pill[data-status]').forEach(p=>{
     p.classList.toggle('selected', p.dataset.status === memStatus);
@@ -1785,6 +1883,14 @@ function toggleMemPill(el, group){
   else if(group === 'role') memRoleId = el.dataset.role;
 }
 
+function clearMemberPassword(){
+  window.__memPasswordAction = 'clear';
+  const el = document.getElementById('memPasswordStatus');
+  if(el){ el.textContent = '✗ Password will be removed on save'; el.style.color = 'var(--wolf-danger)'; }
+  document.getElementById('memPassword').value = '';
+  document.getElementById('memPassword').placeholder = 'Will be cleared on save';
+}
+
 async function saveMember(){
   const userKey = (document.getElementById('memUserKey').value||'').trim().toLowerCase();
   if(!userKey || !/^[a-z][a-z0-9_]*$/.test(userKey)){
@@ -1806,14 +1912,24 @@ async function saveMember(){
     updated_at: new Date().toISOString()
   };
 
+  // Handle password field: empty = keep current, value = set/change, clearMemberPassword() = remove
+  const pwVal = (document.getElementById('memPassword').value||'').trim();
+  if(window.__memPasswordAction === 'clear'){
+    payload.password_hash = null;
+  } else if(pwVal){
+    if(pwVal.length < 4){ showToast('Password must be 4+ characters','error'); return; }
+    payload.password_hash = await hashPassword(userKey, pwVal);
+  }
+
   try{
     if(editingMemberKey){
       await sb.from('floor_members').update(payload).eq('user_key', editingMemberKey);
-      await writeAudit('member_updated', `Updated ${payload.display_name||userKey}`, { user_key: userKey });
+      const passChanged = payload.password_hash !== undefined;
+      await writeAudit('member_updated', `Updated ${payload.display_name||userKey}${passChanged ? ' (password ' + (payload.password_hash ? 'set' : 'cleared') + ')' : ''}`, { user_key: userKey, password_changed: passChanged });
     } else {
       payload.created_at = new Date().toISOString();
       await sb.from('floor_members').insert(payload);
-      await writeAudit('member_added', `Added ${payload.display_name||userKey}`, { user_key: userKey });
+      await writeAudit('member_added', `Added ${payload.display_name||userKey}${payload.password_hash ? ' (with password)' : ''}`, { user_key: userKey });
     }
     closeMemberEdit();
     showToast(editingMemberKey ? 'Member updated ✓' : 'Member added ✓');
@@ -1963,10 +2079,14 @@ function emptyHTML(icon, title, sub){
   return `<div class="empty-state"><div class="es-icon">${icon}</div><div class="es-title">${title}</div>${sub?`<div class="es-sub">${sub}</div>`:''}</div>`;
 }
 
-// AUTO-LOGIN
+// AUTO-LOGIN — bypass password if session is already valid
 (function(){
   const saved = localStorage.getItem('floor_user');
-  if(saved && MEMBERS[saved]) selectUser(saved);
+  const sessionOk = localStorage.getItem('floor_session_valid') === '1';
+  if(saved && MEMBERS[saved]){
+    if(sessionOk) finishLogin(saved);
+    else selectUser(saved); // will re-prompt for password if set
+  }
 })();
 </script>
 </body>
