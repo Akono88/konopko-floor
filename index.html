@@ -523,6 +523,10 @@ body.role-adam .only-adam{display:block!important}
     <div class="tab-view" id="tab-tasks">
       <div class="card">
         <div class="card-label"><i class="fa-solid fa-list-check"></i> Task Board</div>
+        <div style="position:relative;margin-bottom:10px">
+          <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--wolf-text-muted);font-size:0.75rem;pointer-events:none"></i>
+          <input id="taskSearch" type="search" placeholder="Search tasks…" oninput="onTaskSearch(this.value)" style="width:100%;padding:10px 14px 10px 34px;font-family:'Montserrat',sans-serif;font-size:0.8rem;background:var(--wolf-black);color:var(--wolf-text);border:1px solid var(--wolf-border);border-radius:10px;outline:none">
+        </div>
         <div class="filter-row" id="taskFilterRow">
           <button class="filter-chip active" data-filter="all" onclick="filterTasks(this)">All</button>
           <button class="filter-chip" data-filter="mine" onclick="filterTasks(this)">Mine</button>
@@ -579,6 +583,7 @@ body.role-adam .only-adam{display:block!important}
         <div class="wire-toggle">
           <button class="wire-toggle-btn active" onclick="switchWire('chat',this)"><i class="fa-solid fa-comments"></i> Chat</button>
           <button class="wire-toggle-btn" onclick="switchWire('notes',this)"><i class="fa-solid fa-sticky-note"></i> Notes</button>
+          <button class="wire-toggle-btn" onclick="switchWire('ideas',this)"><i class="fa-solid fa-lightbulb"></i> Ideas</button>
         </div>
         <div class="wire-section active" id="wire-chat">
           <div class="chat-list" id="chatList"><div class="loading-dots">Loading…</div><!-- -->
@@ -591,6 +596,9 @@ body.role-adam .only-adam{display:block!important}
         <div class="wire-section" id="wire-notes">
           <div id="notesList"><div class="loading-dots">Loading…</div><!-- -->
 </div>
+        </div>
+        <div class="wire-section" id="wire-ideas">
+          <div id="ideasList"><div class="loading-dots">Loading…</div></div>
         </div>
       </div>
     </div>
@@ -719,6 +727,44 @@ body.role-adam .only-adam{display:block!important}
   </div>
 </div>
 
+<!-- VAULT EDIT MODAL (Adam only) -->
+<div class="qa-modal" id="vaultModal" onclick="if(event.target===this)closeVaultEdit()">
+  <div class="qa-sheet">
+    <div class="qa-grab"></div>
+    <div class="qa-title" id="vaultModalTitle">Vault Entry</div>
+    <div class="qa-sub">Admin · wiki management</div>
+
+    <div class="qa-section-label">Section</div>
+    <div class="qa-pill-row" id="vaultSectionPills">
+      <span class="qa-pill" data-section="house" onclick="toggleVaultPill(this,'section')">🏠 House</span>
+      <span class="qa-pill" data-section="fleet" onclick="toggleVaultPill(this,'section')">🚗 Fleet</span>
+      <span class="qa-pill" data-section="supplies" onclick="toggleVaultPill(this,'section')">📦 Supplies</span>
+      <span class="qa-pill" data-section="vendors" onclick="toggleVaultPill(this,'section')">🔧 Vendors</span>
+      <span class="qa-pill" data-section="logins" onclick="toggleVaultPill(this,'section')">🔑 Logins</span>
+      <span class="qa-pill" data-section="kid" onclick="toggleVaultPill(this,'section')">👶 Kid</span>
+    </div>
+
+    <div class="qa-section-label">Title</div>
+    <input class="qa-input" id="vaultTitle" placeholder="e.g. Wifi Password">
+
+    <div class="qa-section-label">Content</div>
+    <textarea class="qa-textarea" id="vaultContent" placeholder="Details, codes, URLs, notes…" style="min-height:120px"></textarea>
+
+    <div class="qa-section-label">Visible To <span style="font-family:'Montserrat',sans-serif;font-size:0.6rem;font-weight:400;color:var(--wolf-text-muted);letter-spacing:0.3px;text-transform:none;margin-left:6px">· select anyone who should see this</span></div>
+    <div class="qa-pill-row" id="vaultVisibilityPills">
+      <span class="qa-pill adam" data-vis="adam" onclick="toggleVaultPill(this,'vis')"><i class="fa-solid fa-crown"></i> Adam</span>
+      <span class="qa-pill alivia" data-vis="alivia" onclick="toggleVaultPill(this,'vis')"><i class="fa-solid fa-star"></i> Alivia</span>
+      <span class="qa-pill chris" data-vis="chris" onclick="toggleVaultPill(this,'vis')"><i class="fa-solid fa-shield"></i> Chris</span>
+    </div>
+
+    <div class="qa-actions">
+      <button class="qa-btn" id="vaultDeleteBtn" onclick="deleteVaultEntry()" style="color:var(--wolf-danger);border-color:var(--wolf-danger)">Delete</button>
+      <button class="qa-btn" onclick="closeVaultEdit()">Cancel</button>
+      <button class="qa-btn primary" onclick="saveVaultEdit()"><i class="fa-solid fa-check"></i> Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- CHANGE PASSWORD MODAL (Adam only) -->
 <div class="qa-modal" id="changePassModal" onclick="if(event.target===this)closeChangePassword()">
   <div class="qa-sheet">
@@ -742,8 +788,6 @@ body.role-adam .only-adam{display:block!important}
     </div>
   </div>
 </div>
-
-<!-- MEMBER EDIT MODAL -->
 <div class="qa-modal" id="memberModal" onclick="if(event.target===this)closeMemberEdit()">
   <div class="qa-sheet">
     <div class="qa-grab"></div>
@@ -849,12 +893,13 @@ body.role-adam .only-adam{display:block!important}
     <div class="qa-title">New Entry</div>
     <div class="qa-sub">Konopko Floor Operations</div>
     <div class="qa-section-label">Type</div>
-    <div class="qa-kind-row">
+    <div class="qa-kind-row" style="grid-template-columns:repeat(6,1fr)">
       <div class="qa-kind selected" data-kind="task" onclick="selectKind(this)"><span class="k-icon">✅</span><span class="k-label">Task</span></div>
       <div class="qa-kind" data-kind="shop" onclick="selectKind(this)"><span class="k-icon">🛒</span><span class="k-label">Shop</span></div>
       <div class="qa-kind" data-kind="note" onclick="selectKind(this)"><span class="k-icon">💬</span><span class="k-label">Note</span></div>
       <div class="qa-kind" data-kind="event" onclick="selectKind(this)"><span class="k-icon">📅</span><span class="k-label">Event</span></div>
       <div class="qa-kind" data-kind="request" onclick="selectKind(this)"><span class="k-icon">📨</span><span class="k-label">Ask</span></div>
+      <div class="qa-kind" data-kind="brainstorm" onclick="selectKind(this)"><span class="k-icon">💡</span><span class="k-label">Idea</span></div>
     </div>
     <div class="qa-section-label">Title</div>
     <input class="qa-input" id="modalTitle" placeholder="Title / short description…">
@@ -863,7 +908,7 @@ body.role-adam .only-adam{display:block!important}
       <textarea class="qa-textarea" id="modalNotes" placeholder="Optional notes / details…"></textarea>
     </div>
     <div id="modalAssignSection">
-      <div class="qa-section-label">Assign To</div>
+      <div class="qa-section-label">Assign To <span style="font-family:'Montserrat',sans-serif;font-size:0.6rem;font-weight:400;color:var(--wolf-text-muted);letter-spacing:0.3px;text-transform:none;margin-left:6px">· tap to toggle, select multiple</span></div>
       <div class="qa-pill-row">
         <span class="qa-pill adam" data-assign="adam" onclick="togglePill(this,'assign')"><i class="fa-solid fa-crown"></i> Adam</span>
         <span class="qa-pill alivia" data-assign="alivia" onclick="togglePill(this,'assign')"><i class="fa-solid fa-star"></i> Alivia</span>
@@ -883,6 +928,13 @@ body.role-adam .only-adam{display:block!important}
       <div class="qa-row">
         <input class="qa-input" type="date" id="modalDate" style="margin-bottom:0">
         <input class="qa-input" type="time" id="modalTime" style="margin-bottom:0">
+      </div>
+    </div>
+    <div id="modalDueSection" style="display:none">
+      <div class="qa-section-label">Due (optional)</div>
+      <div class="qa-row">
+        <input class="qa-input" type="date" id="modalDueDate" style="margin-bottom:0">
+        <input class="qa-input" type="time" id="modalDueTime" style="margin-bottom:0">
       </div>
     </div>
     <div id="modalAmountSection" style="display:none">
@@ -1094,7 +1146,7 @@ let clockTimer = null;
 let activeShiftId = null;
 let currentFilter = 'all';
 let selectedKind = 'task';
-let selectedAssign = null;
+let selectedAssignees = []; // multi-assign array of user_keys
 let selectedPrio = 'normal';
 let selectedShopCat = 'grocery';
 let currentVaultSection = 'house';
@@ -1374,7 +1426,7 @@ async function loadHome(){
       setText('stat-hot', hot.length);
       setText('stat-req', reqs.length);
     } else {
-      const mine = allTasks.filter(t=>t.assignee===currentUser);
+      const mine = allTasks.filter(t=>taskHasAssignee(t, currentUser));
       const done = mine.filter(t=>t.status==='done');
       setText('myStat-open', mine.filter(t=>t.status!=='done').length);
       setText('myStat-done', done.length);
@@ -1389,7 +1441,7 @@ async function loadHome(){
       }catch(e){}
     }
 
-    const show = currentUser==='adam' ? allTasks : allTasks.filter(t=>t.assignee===currentUser);
+    const show = currentUser==='adam' ? allTasks : allTasks.filter(t=>taskHasAssignee(t, currentUser));
     const openShow = show.filter(t=>t.status!=='done').slice(0,3);
     setText('homeTaskCount', openShow.length);
     const el = document.getElementById('homeTaskList');
@@ -1422,18 +1474,33 @@ async function loadTasks(){
   }catch(e){ console.error('loadTasks',e); }
 }
 
+function taskAssignees(t){
+  // Prefer metadata.assignees (multi), fallback to assignee (single)
+  if(t.metadata && Array.isArray(t.metadata.assignees) && t.metadata.assignees.length) return t.metadata.assignees;
+  return t.assignee ? [t.assignee] : [];
+}
+
+function taskHasAssignee(t, user){
+  const list = taskAssignees(t);
+  return list.includes(user);
+}
+
 function taskHTML(t){
-  const m = MEMBERS[t.assignee] || {};
   const done = t.status === 'done';
+  const assignees = taskAssignees(t);
+  const pillsHtml = assignees.map(a => {
+    const mem = MEMBERS[a] || { name: a };
+    return `<span class="task-assignee ${a}">${esc(mem.name||a)}</span>`;
+  }).join(' ');
   return `<div class="task-item${done?' done':''}" data-id="${t.id}">
     <div class="task-check${done?' checked':''}" onclick="toggleTask('${t.id}',${done})"></div>
     <div class="task-body">
       <div class="task-title">${esc(t.title)}</div>
       <div class="task-meta">
-        ${t.assignee ? `<span class="task-assignee ${t.assignee}">${m.name||t.assignee}</span>` : ''}
+        ${pillsHtml}
         ${t.priority==='hot' ? '<span class="urgent-flag"><i class="fa-solid fa-fire"></i> Hot</span>' : ''}
         ${t.priority==='routine' ? '<span>Routine</span>' : ''}
-        ${t.due_date ? `<span>${fmt(t.due_date)}</span>` : ''}
+        ${t.due_date ? `<span>${fmt(t.due_date)}${t.due_time ? ' · '+t.due_time.slice(0,5) : ''}</span>` : ''}
       </div>
     </div>
   </div>`;
@@ -1446,6 +1513,12 @@ function filterTasks(btn){
   renderTaskList(allTasks, currentFilter);
 }
 
+let taskSearchQuery = '';
+function onTaskSearch(q){
+  taskSearchQuery = (q||'').trim().toLowerCase();
+  renderTaskList(allTasks, currentFilter);
+}
+
 function renderTaskList(tasks, filter){
   let f = [...tasks];
   const today = new Date(); today.setHours(0,0,0,0);
@@ -1453,13 +1526,19 @@ function renderTaskList(tasks, filter){
   const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7);
   const weekEndISO = weekEnd.toISOString().slice(0,10);
 
-  if(filter==='mine') f = f.filter(t=>t.assignee===currentUser);
+  // Free-text search
+  if(taskSearchQuery){
+    f = f.filter(t => (t.title||'').toLowerCase().includes(taskSearchQuery)
+      || (t.metadata && t.metadata.notes && String(t.metadata.notes).toLowerCase().includes(taskSearchQuery)));
+  }
+
+  if(filter==='mine') f = f.filter(t=>taskHasAssignee(t, currentUser));
   if(filter==='today') f = f.filter(t=>t.due_date === todayISO && t.status!=='done');
   if(filter==='week') f = f.filter(t=>t.due_date && t.due_date >= todayISO && t.due_date <= weekEndISO && t.status!=='done');
   if(filter==='overdue') f = f.filter(t=>t.due_date && t.due_date < todayISO && t.status!=='done');
-  if(filter==='adam') f = f.filter(t=>t.assignee==='adam');
-  if(filter==='alivia') f = f.filter(t=>t.assignee==='alivia');
-  if(filter==='chris') f = f.filter(t=>t.assignee==='chris');
+  if(filter==='adam') f = f.filter(t=>taskHasAssignee(t, 'adam'));
+  if(filter==='alivia') f = f.filter(t=>taskHasAssignee(t, 'alivia'));
+  if(filter==='chris') f = f.filter(t=>taskHasAssignee(t, 'chris'));
   if(filter==='hot') f = f.filter(t=>t.priority==='hot');
   if(filter==='open') f = f.filter(t=>t.status!=='done');
   if(filter==='done') f = f.filter(t=>t.status==='done');
@@ -1539,21 +1618,34 @@ function switchWire(section, btn){
   document.getElementById('wire-'+section).classList.add('active');
 }
 
-// NOTES
+// NOTES + IDEAS
+function renderNoteRow(n){
+  return `<div style="padding:12px 0;border-bottom:1px solid var(--wolf-border)">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wolf-gold);margin-bottom:4px">
+      ${n.pinned ? '📌 ' : ''}${MEMBERS[n.author]?.name||n.author} · ${new Date(n.created_at).toLocaleDateString()}
+    </div>
+    ${n.title ? `<div style="font-size:0.85rem;font-weight:600;color:var(--wolf-gold-pale);margin-bottom:4px;font-family:'Playfair Display',serif">${esc(n.title)}</div>` : ''}
+    <div style="font-size:0.8rem;color:var(--wolf-text);line-height:1.5;white-space:pre-wrap">${esc(n.body)}</div>
+  </div>`;
+}
+
 async function loadNotes(){
   try{
-    const { data } = await sb.from('floor_notes').select('*').eq('archived', false).order('pinned',{ascending:false}).order('created_at',{ascending:false}).limit(30);
-    const el = document.getElementById('notesList');
-    if(!el) return;
-    if(!data || !data.length){ el.innerHTML = emptyHTML('📝','No notes yet','Capture something for the team.', { label:'New Note', onclick:"openAddModal('note')" }); return; }
-    el.innerHTML = data.map(n=>`
-      <div style="padding:12px 0;border-bottom:1px solid var(--wolf-border)">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wolf-gold);margin-bottom:4px">
-          ${n.pinned ? '📌 ' : ''}${MEMBERS[n.author]?.name||n.author} · ${new Date(n.created_at).toLocaleDateString()}
-        </div>
-        ${n.title ? `<div style="font-size:0.85rem;font-weight:600;color:var(--wolf-gold-pale);margin-bottom:4px;font-family:'Playfair Display',serif">${esc(n.title)}</div>` : ''}
-        <div style="font-size:0.8rem;color:var(--wolf-text);line-height:1.5;white-space:pre-wrap">${esc(n.body)}</div>
-      </div>`).join('');
+    const { data } = await sb.from('floor_notes').select('*').eq('archived', false).order('pinned',{ascending:false}).order('created_at',{ascending:false}).limit(60);
+    const all = data || [];
+    const notes = all.filter(n => n.color !== 'brainstorm');
+    const ideas = all.filter(n => n.color === 'brainstorm');
+
+    const notesEl = document.getElementById('notesList');
+    if(notesEl){
+      if(!notes.length) notesEl.innerHTML = emptyHTML('📝','No notes yet','Capture something for the team.', { label:'New Note', onclick:"openAddModal('note')" });
+      else notesEl.innerHTML = notes.map(renderNoteRow).join('');
+    }
+    const ideasEl = document.getElementById('ideasList');
+    if(ideasEl){
+      if(!ideas.length) ideasEl.innerHTML = emptyHTML('💡','No ideas yet','Brainstorm something for the household.', { label:'New Idea', onclick:"openAddModal('brainstorm')" });
+      else ideasEl.innerHTML = ideas.map(renderNoteRow).join('');
+    }
   }catch(e){ console.error(e); }
 }
 
@@ -1836,11 +1928,17 @@ function renderVault(){
     el.innerHTML = emptyHTML('🗄️','Empty section',currentUser==='adam' ? 'Add an entry to get started.' : 'Nothing to see here.');
     return;
   }
+  const isAdmin = currentUser === 'adam';
   el.innerHTML = visible.map(w=>`
-    <div class="wiki-item">
-      <div class="wiki-item-title"><i class="fa-solid fa-book"></i> ${esc(w.title)}</div>
+    <div class="wiki-item" ${isAdmin ? `onclick="openVaultEdit('${w.id}')" style="cursor:pointer"` : ''}>
+      <div class="wiki-item-title"><i class="fa-solid fa-book"></i> ${esc(w.title)}${isAdmin ? ' <i class="fa-solid fa-pen-to-square" style="margin-left:auto;font-size:0.7rem;color:var(--wolf-text-muted)"></i>' : ''}</div>
       <div class="wiki-item-content">${esc(w.content||'')}</div>
     </div>`).join('');
+  if(isAdmin){
+    el.innerHTML += `<button onclick="openVaultEdit(null)" style="display:block;width:100%;margin-top:10px;padding:12px;border-radius:10px;border:1px dashed var(--wolf-border-strong);background:transparent;color:var(--wolf-gold);font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;font-weight:700">
+      <i class="fa-solid fa-plus"></i> Add Vault Entry
+    </button>`;
+  }
 }
 
 // SHOPPING
@@ -1963,13 +2061,15 @@ function closeModal(){
   document.getElementById('modalNotes').value = '';
   const dt = document.getElementById('modalDate'); if(dt) dt.value = '';
   const tm = document.getElementById('modalTime'); if(tm) tm.value = '';
+  const dd = document.getElementById('modalDueDate'); if(dd) dd.value = '';
+  const dtm = document.getElementById('modalDueTime'); if(dtm) dtm.value = '';
   const am = document.getElementById('modalAmount'); if(am) am.value = '';
   document.querySelectorAll('.qa-pill[data-assign]').forEach(p=>p.classList.remove('selected'));
   document.querySelectorAll('.qa-pill[data-prio]').forEach(p=>p.classList.remove('selected'));
   document.querySelectorAll('.qa-pill[data-shop]').forEach(p=>p.classList.remove('selected'));
   document.querySelector('.qa-pill[data-prio="normal"]').classList.add('selected');
   document.querySelector('.qa-pill[data-shop="grocery"]').classList.add('selected');
-  selectedAssign = null; selectedPrio = 'normal'; selectedShopCat = 'grocery';
+  selectedAssignees = []; selectedPrio = 'normal'; selectedShopCat = 'grocery';
 }
 
 function selectKind(el){
@@ -1984,6 +2084,7 @@ function setKind(kind){
   const el = document.querySelector(`.qa-kind[data-kind="${kind}"]`);
   if(el){ document.querySelectorAll('.qa-kind').forEach(k=>k.classList.remove('selected')); el.classList.add('selected'); }
   document.getElementById('modalDateSection').style.display = (kind==='event') ? '' : 'none';
+  document.getElementById('modalDueSection').style.display = (kind==='task') ? '' : 'none';
   document.getElementById('modalAssignSection').style.display = ['shop','note'].includes(kind) ? 'none' : '';
   document.getElementById('modalPrioSection').style.display = (kind==='task') ? '' : 'none';
   document.getElementById('modalAmountSection').style.display = (kind==='request') ? '' : 'none';
@@ -1993,9 +2094,16 @@ function setKind(kind){
 
 function togglePill(el, group){
   if(group==='assign'){
-    document.querySelectorAll('.qa-pill[data-assign]').forEach(p=>p.classList.remove('selected'));
-    el.classList.add('selected');
-    selectedAssign = el.dataset.assign;
+    // Multi-select — toggle membership in the array
+    const key = el.dataset.assign;
+    const idx = selectedAssignees.indexOf(key);
+    if(idx === -1){
+      selectedAssignees.push(key);
+      el.classList.add('selected');
+    } else {
+      selectedAssignees.splice(idx, 1);
+      el.classList.remove('selected');
+    }
   } else if(group==='prio') {
     document.querySelectorAll('.qa-pill[data-prio]').forEach(p=>p.classList.remove('selected'));
     el.classList.add('selected');
@@ -2015,18 +2123,27 @@ async function submitModal(){
   try{
     const now = new Date().toISOString();
     if(selectedKind === 'task'){
+      const assignees = selectedAssignees.length ? selectedAssignees : [currentUser];
+      const primary = assignees[0];
+      const meta = {};
+      if(notes) meta.notes = notes;
+      if(assignees.length > 1) meta.assignees = assignees;
+      const dueDate = document.getElementById('modalDueDate').value || null;
+      const dueTime = document.getElementById('modalDueTime').value || null;
       await sb.from('floor_tasks').insert({
         title,
-        assignee: selectedAssign || currentUser,
+        assignee: primary,
         priority: selectedPrio || 'normal',
         status: 'open',
         kind: 'task',
+        due_date: dueDate,
+        due_time: dueTime,
         created_by: currentUser,
         created_at: now,
         updated_at: now,
-        metadata: notes ? { notes } : {}
+        metadata: meta
       });
-      await writeAudit('task_created', 'Created task: ' + title, { assignee: selectedAssign });
+      await writeAudit('task_created', 'Created task: ' + title + (assignees.length > 1 ? ' (' + assignees.length + ' assignees)' : ''), { assignees });
     } else if(selectedKind === 'shop'){
       await sb.from('floor_shopping').insert({
         item: title,
@@ -2043,22 +2160,35 @@ async function submitModal(){
         author: currentUser,
         pinned: false,
         archived: false,
+        color: 'note',
         created_at: now
       });
       await writeAudit('note_added', 'Added note: ' + title, {});
+    } else if(selectedKind === 'brainstorm'){
+      await sb.from('floor_notes').insert({
+        title: '💡 ' + title,
+        body: notes || title,
+        author: currentUser,
+        pinned: false,
+        archived: false,
+        color: 'brainstorm',
+        created_at: now
+      });
+      await writeAudit('idea_added', 'Brainstorm idea: ' + title, {});
     } else if(selectedKind === 'event'){
       const dateVal = document.getElementById('modalDate').value;
       const timeVal = document.getElementById('modalTime').value;
+      const attendees = selectedAssignees.length ? selectedAssignees : [currentUser];
       await sb.from('floor_events').insert({
         title,
         event_date: dateVal || new Date().toISOString().slice(0,10),
         start_time: timeVal || null,
         all_day: !timeVal,
-        attendees: selectedAssign ? [selectedAssign] : [currentUser],
+        attendees,
         created_by: currentUser,
         created_at: now
       });
-      await writeAudit('event_created', 'Created event: ' + title, {});
+      await writeAudit('event_created', 'Created event: ' + title, { attendees });
     } else if(selectedKind === 'request'){
       const amt = parseFloat(document.getElementById('modalAmount').value) || 0;
       await sb.from('floor_requests').insert({
@@ -2387,6 +2517,98 @@ async function sendClockReminder(){
     showToast('Failed to send. Try again.','error');
     console.error(e);
   }
+}
+
+// ═══ Vault editing (Adam only) ═══
+let editingVaultId = null;
+let vaultSection = 'house';
+let vaultVisibility = [];
+
+function openVaultEdit(id){
+  if(currentUser !== 'adam'){ showToast('Principal only','error'); return; }
+  editingVaultId = id || null;
+  const existing = id ? (window.__vaultData || []).find(w => w.id === id) : null;
+  document.getElementById('vaultModalTitle').textContent = existing ? 'Edit Vault Entry' : 'New Vault Entry';
+  document.getElementById('vaultTitle').value = existing?.title || '';
+  document.getElementById('vaultContent').value = existing?.content || '';
+  vaultSection = existing?.section || currentVaultSection || 'house';
+  vaultVisibility = existing?.visible_to?.length ? [...existing.visible_to] : ['adam','alivia','chris'];
+
+  // Section pills
+  document.querySelectorAll('#vaultSectionPills .qa-pill').forEach(p => {
+    p.classList.toggle('selected', p.dataset.section === vaultSection);
+  });
+  // Visibility pills
+  document.querySelectorAll('#vaultVisibilityPills .qa-pill').forEach(p => {
+    p.classList.toggle('selected', vaultVisibility.includes(p.dataset.vis));
+  });
+  // Delete button visibility
+  document.getElementById('vaultDeleteBtn').style.display = editingVaultId ? '' : 'none';
+  document.getElementById('vaultModal').classList.add('open');
+}
+
+function closeVaultEdit(){
+  document.getElementById('vaultModal').classList.remove('open');
+  editingVaultId = null;
+}
+
+function toggleVaultPill(el, group){
+  if(group === 'section'){
+    document.querySelectorAll('#vaultSectionPills .qa-pill').forEach(p => p.classList.remove('selected'));
+    el.classList.add('selected');
+    vaultSection = el.dataset.section;
+  } else if(group === 'vis'){
+    const key = el.dataset.vis;
+    const idx = vaultVisibility.indexOf(key);
+    if(idx === -1){ vaultVisibility.push(key); el.classList.add('selected'); }
+    else { vaultVisibility.splice(idx, 1); el.classList.remove('selected'); }
+  }
+}
+
+async function saveVaultEdit(){
+  const title = (document.getElementById('vaultTitle').value||'').trim();
+  const content = (document.getElementById('vaultContent').value||'').trim();
+  if(!title){ showToast('Title required','error'); return; }
+  if(!vaultVisibility.length){ showToast('Pick at least one viewer','error'); return; }
+
+  try{
+    if(editingVaultId){
+      await sb.from('floor_wiki').update({
+        section: vaultSection, title, content,
+        visible_to: vaultVisibility,
+        updated_at: new Date().toISOString()
+      }).eq('id', editingVaultId);
+      await writeAudit('vault_updated', 'Updated vault entry: ' + title, { id: editingVaultId });
+    } else {
+      // Append order_index high so new items sort last in their section
+      const existing = (window.__vaultData || []).filter(w => w.section === vaultSection);
+      const nextIdx = existing.length ? Math.max(...existing.map(w => w.order_index || 0)) + 1 : 1;
+      await sb.from('floor_wiki').insert({
+        section: vaultSection, title, content,
+        visible_to: vaultVisibility,
+        order_index: nextIdx
+      });
+      await writeAudit('vault_created', 'Added vault entry: ' + title, {});
+    }
+    closeVaultEdit();
+    showToast('Vault saved ✓');
+    await loadVault();
+  }catch(e){
+    showToast('Save failed: ' + (e.message||''), 'error');
+    console.error(e);
+  }
+}
+
+async function deleteVaultEntry(){
+  if(!editingVaultId) return;
+  if(!confirm('Delete this vault entry? This cannot be undone.')) return;
+  try{
+    await sb.from('floor_wiki').delete().eq('id', editingVaultId);
+    await writeAudit('vault_deleted', 'Deleted vault entry', { id: editingVaultId });
+    closeVaultEdit();
+    showToast('Vault entry deleted');
+    await loadVault();
+  }catch(e){ showToast('Delete failed','error'); }
 }
 
 // ═══ Change My Password (Adam only) ═══
