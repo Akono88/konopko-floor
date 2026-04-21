@@ -117,6 +117,9 @@ header h1{font-family:'Playfair Display',serif;font-weight:800;font-size:1.7rem;
 header .subtitle{font-family:'JetBrains Mono',monospace;font-size:0.55rem;font-weight:500;letter-spacing:3px;text-transform:uppercase;color:var(--wolf-text-gold)}
 header .clock{margin-top:6px;font-size:0.62rem;color:var(--wolf-text-dim);font-weight:500;letter-spacing:1.5px;text-transform:uppercase;font-family:'JetBrains Mono',monospace}
 .header-signout{position:absolute;top:20px;right:0;background:none;border:1px solid var(--wolf-border);color:var(--wolf-text-muted);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:0.7rem}
+.header-passkey{position:absolute;top:20px;right:42px;background:none;border:1px solid var(--wolf-border);color:var(--wolf-text-muted);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:0.7rem;display:none;transition:all 0.15s}
+.header-passkey:hover{color:var(--wolf-gold);border-color:var(--wolf-border-strong)}
+body.role-adam .header-passkey{display:inline-flex}
 
 /* TABS */
 .tab-view{display:none;animation:fadeUp 0.2s ease}
@@ -446,7 +449,8 @@ body.role-adam .admin-nav{display:flex}
       <div class="subtitle" id="headerSubtitle">Household Operations</div>
       <div class="clock" id="appClock"></div>
       <span class="conn-dot" id="connDot" title="Realtime status">Live</span>
-      <button class="header-signout" onclick="confirmSignOut()"><i class="fa-solid fa-right-from-bracket"></i></button>
+      <button class="header-passkey" onclick="openChangePassword()" title="Change password"><i class="fa-solid fa-key"></i></button>
+      <button class="header-signout" onclick="confirmSignOut()" title="Sign out"><i class="fa-solid fa-right-from-bracket"></i></button>
     </header>
 
     <!-- HOME -->
@@ -688,6 +692,30 @@ body.role-adam .admin-nav{display:flex}
     <div class="qa-actions">
       <button class="qa-btn" onclick="disconnectKaleesi()">Disconnect</button>
       <button class="qa-btn primary" onclick="saveKaleesiConfig()"><i class="fa-solid fa-link"></i> Connect</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE PASSWORD MODAL (Adam only) -->
+<div class="qa-modal" id="changePassModal" onclick="if(event.target===this)closeChangePassword()">
+  <div class="qa-sheet">
+    <div class="qa-grab"></div>
+    <div class="qa-title">Change Password</div>
+    <div class="qa-sub">Principal · account security</div>
+
+    <div id="changePassCurrentWrap">
+      <div class="qa-section-label">Current Password</div>
+      <input class="qa-input" type="password" id="cpCurrent" placeholder="Current password" autocomplete="current-password">
+    </div>
+    <div class="qa-section-label">New Password</div>
+    <input class="qa-input" type="password" id="cpNew" placeholder="At least 4 characters" autocomplete="new-password">
+    <div class="qa-section-label">Confirm New Password</div>
+    <input class="qa-input" type="password" id="cpConfirm" placeholder="Re-type new password" autocomplete="new-password">
+    <div id="cpError" style="min-height:16px;font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:1px;color:var(--wolf-danger);text-align:center;margin:4px 0 8px;opacity:0;transition:opacity 0.2s">&nbsp;</div>
+
+    <div class="qa-actions">
+      <button class="qa-btn" onclick="closeChangePassword()">Cancel</button>
+      <button class="qa-btn primary" id="cpSubmitBtn" onclick="saveChangePassword()"><i class="fa-solid fa-check"></i> Save</button>
     </div>
   </div>
 </div>
@@ -2310,6 +2338,81 @@ window.addEventListener('offline', ()=>setConnState('offline'));
 // Sign-out confirmation (prevents accidental taps)
 function confirmSignOut(){
   if(confirm('Sign out of The Floor?')) signOut();
+}
+
+// ═══ Change My Password (Adam only) ═══
+async function openChangePassword(){
+  if(currentUser !== 'adam'){ showToast('Only the principal can use this','error'); return; }
+  // Detect whether a current password is set so we know whether to ask for it
+  let hasPw = false;
+  try{
+    const { data } = await sb.from('floor_members').select('password_hash').eq('user_key','adam').single();
+    hasPw = !!(data && data.password_hash);
+  }catch(_){}
+  document.getElementById('changePassCurrentWrap').style.display = hasPw ? '' : 'none';
+  document.getElementById('cpCurrent').value = '';
+  document.getElementById('cpNew').value = '';
+  document.getElementById('cpConfirm').value = '';
+  showCpError('');
+  document.getElementById('changePassModal').classList.add('open');
+  setTimeout(()=>{ try{ (hasPw ? document.getElementById('cpCurrent') : document.getElementById('cpNew')).focus(); }catch(_){} }, 100);
+}
+
+function closeChangePassword(){
+  document.getElementById('changePassModal').classList.remove('open');
+}
+
+function showCpError(msg){
+  const el = document.getElementById('cpError');
+  if(!el) return;
+  if(msg){ el.textContent = msg; el.style.opacity = '1'; }
+  else { el.textContent = '\u00a0'; el.style.opacity = '0'; }
+}
+
+async function saveChangePassword(){
+  if(currentUser !== 'adam'){ showCpError('Only the principal can do this'); return; }
+  const current = (document.getElementById('cpCurrent').value||'');
+  const next    = (document.getElementById('cpNew').value||'').trim();
+  const confirm2 = (document.getElementById('cpConfirm').value||'').trim();
+  const currentWrap = document.getElementById('changePassCurrentWrap');
+  const currentRequired = currentWrap.style.display !== 'none';
+
+  if(next.length < 4){ showCpError('New password must be 4+ characters'); return; }
+  if(next !== confirm2){ showCpError('Passwords do not match'); return; }
+
+  const btn = document.getElementById('cpSubmitBtn');
+  btn.disabled = true;
+
+  try{
+    // If a current password exists, verify it before accepting the new one
+    if(currentRequired){
+      if(!current){ showCpError('Enter your current password'); btn.disabled = false; return; }
+      const { data } = await sb.from('floor_members').select('password_hash').eq('user_key','adam').single();
+      const existingHash = data && data.password_hash;
+      const attempted = await hashPassword('adam', current);
+      if(attempted !== existingHash){
+        showCpError('Current password is incorrect');
+        document.getElementById('cpCurrent').value = '';
+        btn.disabled = false;
+        return;
+      }
+    }
+
+    const newHash = await hashPassword('adam', next);
+    const { error } = await sb.from('floor_members')
+      .update({ password_hash: newHash, updated_at: new Date().toISOString() })
+      .eq('user_key', 'adam');
+    if(error) throw error;
+
+    await writeAudit('password_changed', 'Principal changed own password', { user_key: 'adam' });
+    closeChangePassword();
+    showToast('Password updated ✓');
+  }catch(e){
+    showCpError('Save failed. Try again.');
+    console.error(e);
+  }finally{
+    btn.disabled = false;
+  }
 }
 
 // Morning briefing — auto-summary for Adam's home
