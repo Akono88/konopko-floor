@@ -635,9 +635,14 @@ body.modal-open #main-app{overflow:hidden}
         <div class="wire-section active" id="wire-chat">
           <div class="chat-list" id="chatList"><div class="loading-dots">Loading…</div><!-- -->
 </div>
+          <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">
+            <button type="button" onclick="insertMention('adam')" style="padding:4px 10px;border-radius:14px;border:1px solid var(--wolf-border);background:var(--wolf-slate);color:var(--wolf-gold);font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:0.5px;cursor:pointer">@adam</button>
+            <button type="button" onclick="insertMention('alivia')" style="padding:4px 10px;border-radius:14px;border:1px solid var(--wolf-border);background:var(--wolf-slate);color:var(--director-rose);font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:0.5px;cursor:pointer">@alivia</button>
+            <button type="button" onclick="insertMention('chris')" style="padding:4px 10px;border-radius:14px;border:1px solid var(--wolf-border);background:var(--wolf-slate);color:var(--director-em);font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:0.5px;cursor:pointer">@chris</button>
+          </div>
           <div class="chat-input-bar">
             <button onclick="attachChatPhoto()" title="Attach photo" style="width:34px;height:34px;border-radius:8px;background:var(--wolf-slate);border:1px solid var(--wolf-border);color:var(--wolf-text-dim);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-camera"></i></button>
-            <input class="chat-input" id="chatInput" placeholder="Message the floor…" onkeydown="if(event.key==='Enter')sendMessage()">
+            <input class="chat-input" id="chatInput" placeholder="Message the floor… (use @name to mention)" onkeydown="if(event.key==='Enter')sendMessage()">
             <button class="chat-send" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
           </div>
         </div>
@@ -1362,6 +1367,7 @@ async function finishLogin(key){
   try{ await loadAll(); }catch(e){ console.error('loadAll:', e); }
   subscribeRealtime();
   runRecurringEngine();
+  initNotifications();
   // Reveal app
   document.getElementById('portal').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
@@ -1425,6 +1431,9 @@ function subscribeRealtime(){
     if(realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel = null; }
     setConnState('connecting');
     realtimeChannel = sb.channel('floor-main')
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'floor_tasks'},(p)=>{ handleRealtimeForNotify('floor_tasks', p.new); })
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'floor_messages'},(p)=>{ handleRealtimeForNotify('floor_messages', p.new); })
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'floor_requests'},(p)=>{ handleRealtimeForNotify('floor_requests', p.new); })
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_tasks'},()=>{loadTasks();loadHome()})
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_messages'},()=>loadMessages())
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_requests'},()=>{loadRequests();loadHome()})
@@ -1645,11 +1654,12 @@ function renderChat(msgs){
     const self = m.author === currentUser;
     const mem = MEMBERS[m.author] || {name:m.author,init:(m.author||'?')[0].toUpperCase(),cls:'adam'};
     const photoHtml = m.photo_url ? `<a href="${esc(m.photo_url)}" target="_blank" style="display:block;margin-top:6px;border-radius:10px;overflow:hidden;max-width:260px"><img src="${esc(m.photo_url)}" alt="photo" style="width:100%;display:block;border-radius:10px" loading="lazy"></a>` : '';
+    const bodyHtml = renderWithMentions(m.body || '');
     html += `<div class="chat-msg${self?' self':''}">
       ${!self ? `<div class="chat-av ${mem.cls}">${mem.init}</div>` : ''}
       <div class="chat-bubble-wrap">
         <div class="chat-meta ${mem.cls}"><span class="who">${mem.name}</span> · ${d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</div>
-        <div class="chat-bubble">${esc(m.body)}${photoHtml}</div>
+        <div class="chat-bubble">${bodyHtml}${photoHtml}</div>
       </div>
       ${self ? `<div class="chat-av ${mem.cls}">${mem.init}</div>` : ''}
     </div>`;
@@ -1675,6 +1685,15 @@ async function sendMessage(photoUrl){
 
 function attachChatPhoto(){
   pickAndUploadPhoto(url => { sendMessage(url); showToast('Photo sent ✓'); });
+}
+
+function insertMention(name){
+  const inp = document.getElementById('chatInput');
+  if(!inp) return;
+  const cur = inp.value;
+  const prefix = cur && !cur.endsWith(' ') ? cur + ' ' : cur;
+  inp.value = prefix + '@' + name + ' ';
+  inp.focus();
 }
 
 function switchWire(section, btn){
@@ -1837,39 +1856,55 @@ function distMeters(lat1, lng1, lat2, lng2){
 
 async function clockIn(){
   const geoInfo = document.getElementById('geoInfo');
-  geoInfo.innerHTML = '<div class="geo-pill" style="color:var(--wolf-text-muted)"><i class="fa-solid fa-location-crosshairs"></i> Checking location…</div>';
-
-  let lat = null, lng = null, geoStatus = 'unknown';
-  try{
-    const pos = await new Promise((resolve,reject)=>{
-      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000, enableHighAccuracy: true });
-    });
-    lat = pos.coords.latitude;
-    lng = pos.coords.longitude;
-    const d = distMeters(lat, lng, HOME_LOC.lat, HOME_LOC.lng);
-    geoStatus = d <= HOME_LOC.radius ? 'verified' : 'offsite';
-  }catch(e){ geoStatus = 'denied'; }
-
+  // INSTANT feedback — create the shift row immediately, fetch geo in background
   try{
     const now = new Date().toISOString();
-    const { data } = await sb.from('floor_shifts').insert({
+    const { data, error } = await sb.from('floor_shifts').insert({
       person: currentUser,
       clock_in_at: now,
-      clock_in_lat: lat,
-      clock_in_lng: lng,
-      clock_in_geo: geoStatus
+      clock_in_geo: 'pending'
     }).select().single();
+    if(error) throw error;
     activeShiftId = data.id;
     clockStart = new Date(now);
     renderClockedIn();
-    const badge = geoStatus==='verified' ? '<i class="fa-solid fa-circle-check"></i> At home · verified' :
-                  geoStatus==='offsite' ? '<i class="fa-solid fa-triangle-exclamation"></i> Off-site · flagged' :
-                  '<i class="fa-solid fa-location-crosshairs"></i> Location unavailable';
-    const color = geoStatus==='verified' ? 'var(--wolf-success)' : geoStatus==='offsite' ? 'var(--wolf-warning)' : 'var(--wolf-text-muted)';
-    geoInfo.innerHTML = `<div class="geo-pill" style="color:${color}">${badge}</div>`;
-    await writeAudit('clock_in', `Clocked in (${geoStatus})`, { shift_id: data.id, geo: geoStatus });
     showToast('Clocked in ✓');
-  }catch(e){ showToast('Clock-in failed','error'); console.error(e); }
+    geoInfo.innerHTML = '<div class="geo-pill" style="color:var(--wolf-text-muted)"><i class="fa-solid fa-location-crosshairs"></i> Checking location…</div>';
+    await writeAudit('clock_in', 'Clocked in', { shift_id: data.id });
+  }catch(e){
+    showToast('Clock-in failed: ' + (e.message||''), 'error');
+    console.error('clock_in:', e);
+    return;
+  }
+
+  // Background geolocation — shorter timeout, update row when resolved
+  if(!navigator.geolocation){
+    geoInfo.innerHTML = '<div class="geo-pill" style="color:var(--wolf-text-muted)"><i class="fa-solid fa-location-crosshairs"></i> Location unavailable</div>';
+    sb.from('floor_shifts').update({ clock_in_geo: 'unavailable' }).eq('id', activeShiftId).then(()=>{});
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const d = distMeters(lat, lng, HOME_LOC.lat, HOME_LOC.lng);
+      const geoStatus = d <= HOME_LOC.radius ? 'verified' : 'offsite';
+      try{
+        await sb.from('floor_shifts').update({
+          clock_in_lat: lat, clock_in_lng: lng, clock_in_geo: geoStatus
+        }).eq('id', activeShiftId);
+      }catch(_){}
+      const badge = geoStatus==='verified' ? '<i class="fa-solid fa-circle-check"></i> At home · verified' : '<i class="fa-solid fa-triangle-exclamation"></i> Off-site · flagged';
+      const color = geoStatus==='verified' ? 'var(--wolf-success)' : 'var(--wolf-warning)';
+      if(geoInfo) geoInfo.innerHTML = `<div class="geo-pill" style="color:${color}">${badge}</div>`;
+    },
+    async (err) => {
+      try{ await sb.from('floor_shifts').update({ clock_in_geo: 'denied' }).eq('id', activeShiftId); }catch(_){}
+      if(geoInfo) geoInfo.innerHTML = '<div class="geo-pill" style="color:var(--wolf-text-muted)"><i class="fa-solid fa-location-crosshairs"></i> Location unavailable</div>';
+    },
+    { timeout: 5000, enableHighAccuracy: false, maximumAge: 60000 }
+  );
 }
 
 async function clockOut(){
@@ -2739,6 +2774,148 @@ async function sendHandoff(){
     showToast('Handoff sent ✓');
     closeHandoff();
   }catch(e){ showToast('Failed to send','error'); }
+}
+
+// ═══ NOTIFICATIONS ═══
+// Uses the Notification API for in-browser alerts (works when app is open
+// or installed as PWA). Events covered:
+//   • New request (→ Adam)
+//   • New task assigned to me
+//   • @mention in chat
+//   • Task/event due in 24h or 1h
+//   • Kaleesi day reminder (once per day on first load)
+
+let notifyLastIds = { msgs: new Set(), tasks: new Set(), reqs: new Set() };
+let notifyInitialized = false;
+
+async function requestNotifyPermission(){
+  if(!('Notification' in window)) return false;
+  if(Notification.permission === 'granted') return true;
+  if(Notification.permission === 'denied') return false;
+  try{
+    const res = await Notification.requestPermission();
+    return res === 'granted';
+  }catch(_){ return false; }
+}
+
+function notify(title, body, tag){
+  try{
+    if('Notification' in window && Notification.permission === 'granted'){
+      const n = new Notification(title, { body, tag: tag || 'floor', icon: 'icon.svg', badge: 'icon.svg' });
+      n.onclick = () => { window.focus(); n.close(); };
+    }
+  }catch(_){}
+  // Also show as in-app toast for users without permission
+  showToast(title);
+}
+
+// Call on first sign-in to ask for permission (silently fails if denied)
+async function initNotifications(){
+  if(notifyInitialized) return;
+  notifyInitialized = true;
+  // Defer the prompt slightly so the user sees the app first
+  setTimeout(()=>requestNotifyPermission(), 1500);
+
+  // Seed the "already seen" sets so we don't fire on first data load
+  notifyLastIds.msgs = new Set((await sb.from('floor_messages').select('id').order('created_at',{ascending:false}).limit(50)).data?.map(r=>r.id) || []);
+  notifyLastIds.tasks = new Set((await sb.from('floor_tasks').select('id').order('created_at',{ascending:false}).limit(50)).data?.map(r=>r.id) || []);
+  notifyLastIds.reqs = new Set((await sb.from('floor_requests').select('id').order('created_at',{ascending:false}).limit(50)).data?.map(r=>r.id) || []);
+
+  // Check existing data for due-soon reminders + kaleesi day
+  await checkDueReminders();
+  checkKaleesiDayReminder();
+  // Every 5 minutes: re-check due soon
+  setInterval(checkDueReminders, 5 * 60 * 1000);
+}
+
+// When a new request, task, or message arrives via realtime, compare IDs
+function handleRealtimeForNotify(table, newRow){
+  if(!newRow || !newRow.id) return;
+  if(table === 'floor_messages'){
+    if(notifyLastIds.msgs.has(newRow.id)) return;
+    notifyLastIds.msgs.add(newRow.id);
+    if(newRow.author === currentUser) return; // own message
+    const body = String(newRow.body || '');
+    const mentionPattern = new RegExp('@' + currentUser + '\\b', 'i');
+    if(mentionPattern.test(body)){
+      const who = MEMBERS[newRow.author]?.name || newRow.author;
+      notify(`${who} mentioned you`, body.slice(0, 140), 'mention-'+newRow.id);
+    }
+  } else if(table === 'floor_tasks'){
+    if(notifyLastIds.tasks.has(newRow.id)) return;
+    notifyLastIds.tasks.add(newRow.id);
+    if(newRow.created_by === currentUser) return;
+    const assignees = (newRow.metadata && Array.isArray(newRow.metadata.assignees)) ? newRow.metadata.assignees : (newRow.assignee ? [newRow.assignee] : []);
+    if(assignees.includes(currentUser)){
+      notify('New task for you', newRow.title || 'Open Tasks tab to view', 'task-'+newRow.id);
+    }
+  } else if(table === 'floor_requests'){
+    if(notifyLastIds.reqs.has(newRow.id)) return;
+    notifyLastIds.reqs.add(newRow.id);
+    if(newRow.submitted_by === currentUser) return;
+    // Only notify Adam of new requests (he's the approver)
+    if(currentUser === 'adam' && newRow.status === 'pending'){
+      const from = MEMBERS[newRow.submitted_by]?.name || newRow.submitted_by;
+      const amt = newRow.amount_cents ? ' · $' + (newRow.amount_cents/100).toFixed(0) : '';
+      notify(`Request from ${from}${amt}`, newRow.title || newRow.notes || '', 'req-'+newRow.id);
+    }
+  }
+}
+
+async function checkDueReminders(){
+  try{
+    const now = new Date();
+    const in1h = new Date(now.getTime() + 60*60*1000);
+    const in24h = new Date(now.getTime() + 24*60*60*1000);
+    const { data: tasks } = await sb.from('floor_tasks').select('*').neq('status','done').not('due_date','is',null);
+    if(!tasks) return;
+    for(const t of tasks){
+      const isMine = (t.assignee === currentUser) || (t.metadata && Array.isArray(t.metadata.assignees) && t.metadata.assignees.includes(currentUser));
+      if(!isMine) continue;
+      const dueStr = t.due_time ? `${t.due_date}T${t.due_time}` : `${t.due_date}T23:59`;
+      const dueAt = new Date(dueStr);
+      if(isNaN(dueAt)) continue;
+      const msUntil = dueAt - now;
+      const seenKey = 'notify_due_' + t.id;
+      if(msUntil > 0 && msUntil <= 60*60*1000){
+        if(!localStorage.getItem(seenKey + '_1h')){
+          localStorage.setItem(seenKey + '_1h', '1');
+          notify('Due in 1 hour', t.title, 'due-1h-'+t.id);
+        }
+      } else if(msUntil > 0 && msUntil <= 24*60*60*1000){
+        if(!localStorage.getItem(seenKey + '_24h')){
+          localStorage.setItem(seenKey + '_24h', '1');
+          notify('Due in 24 hours', t.title, 'due-24h-'+t.id);
+        }
+      }
+    }
+  }catch(e){ console.warn('due-check:',e); }
+}
+
+function checkKaleesiDayReminder(){
+  if(currentUser !== 'adam') return;
+  if(!kaleesiSchedule) return;
+  const today = new Date().toISOString().slice(0,10);
+  const day = getKaleesiDay(today);
+  if(!day) return;
+  const key = 'notify_kday_' + today;
+  if(localStorage.getItem(key)) return;
+  localStorage.setItem(key, '1');
+  if(day.type === 'exchange'){
+    const label = day.parentAfter === 'adam' ? `Kaleesi exchange today · pickup ${day.exchangeTime||''}` : `Kaleesi exchange today · drop off ${day.exchangeTime||''}`;
+    notify('🦋 Kaleesi day', label, 'kday-'+today);
+  } else if(isAdamCustody(day)){
+    notify('🦋 Kaleesi day', 'Full custody today', 'kday-'+today);
+  }
+}
+
+// @mention helpers
+function renderWithMentions(text){
+  const safe = esc(text);
+  return safe.replace(/@(adam|alivia|chris)\b/gi, (match, name) => {
+    const cls = name.toLowerCase();
+    return `<span style="background:rgba(212,175,55,0.18);color:var(--wolf-gold-bright);padding:1px 5px;border-radius:4px;font-weight:600">@${name}</span>`;
+  });
 }
 
 // PHOTO UPLOAD via Supabase Storage (floor-photos bucket)
