@@ -1,5 +1,5 @@
 // Konopko Floor — Service Worker
-const CACHE_NAME = 'floor-v4-2026-04-22-clockfix';
+const CACHE_NAME = 'floor-v5-2026-04-22-datepicker';
 const APP_SHELL = [
   '/konopko-floor/',
   '/konopko-floor/index.html',

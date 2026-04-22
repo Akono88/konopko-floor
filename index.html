@@ -343,6 +343,10 @@ body.role-adam .only-adam{display:block!important}
 /* Lock body scroll when ANY modal is open so the backdrop can't drift */
 body.modal-open{overflow:hidden;touch-action:none}
 body.modal-open #main-app{overflow:hidden}
+/* Date/time inputs — entire field opens the picker on click */
+.qa-input[type="date"],.qa-input[type="time"]{cursor:pointer;position:relative;min-height:44px;line-height:1.4}
+.qa-input[type="date"]::-webkit-calendar-picker-indicator,.qa-input[type="time"]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:0.8;filter:invert(75%) sepia(30%) saturate(800%) hue-rotate(10deg)}
+.qa-input[type="date"]:hover,.qa-input[type="time"]:hover{border-color:var(--wolf-border-strong)}
 /* Inputs inside modals on iOS: prevent zoom on focus */
 .qa-input,.qa-textarea,.signin-input,.persona-input{font-size:16px!important}
 .qa-sheet input[type="text"],.qa-sheet input[type="password"],.qa-sheet input[type="number"],.qa-sheet input[type="date"],.qa-sheet input[type="time"],.qa-sheet input[type="email"],.qa-sheet input[type="tel"],.qa-sheet textarea{font-size:16px}
@@ -1055,11 +1059,20 @@ body.modal-open #main-app{overflow:hidden}
 </div>
 
 <script>
-const FLOOR_BUILD = '2026-04-22-v4-clockfix';
+const FLOOR_BUILD = '2026-04-22-v5-datepicker';
 console.log('%c🦊 The Floor · build ' + FLOOR_BUILD, 'color:#D4AF37;font-weight:bold;font-size:12px');
 const SUPA_URL = 'https://pvxlouqzmwdcrvmnfqfu.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2eGxvdXF6bXdkY3J2bW5mcWZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2MjY0MzIsImV4cCI6MjA5MjIwMjQzMn0.q22RcLEhswJ_82BovoxBfOJFgMCPfz-cSbU0M9JlJew';
 const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// Date/time inputs — click anywhere in the field to open the native picker
+document.addEventListener('click', (e) => {
+  const el = e.target;
+  if(el && el.matches && el.matches('input[type="date"], input[type="time"]')){
+    try { if(typeof el.showPicker === 'function') el.showPicker(); }
+    catch(_){}
+  }
+}, true);
 
 // PWA: service worker + install prompt + iOS-aware detection
 let deferredInstall = null;
