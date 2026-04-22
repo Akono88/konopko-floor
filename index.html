@@ -175,9 +175,15 @@ body.role-adam .header-passkey{display:inline-flex}
 .filter-chip.active{background:var(--wolf-gold);border-color:var(--wolf-gold);color:var(--wolf-black)}
 .task-item{display:flex;align-items:flex-start;gap:12px;padding:12px 8px;border-bottom:1px solid var(--wolf-border)}
 .task-item:last-child{border-bottom:none}
-.task-check{width:22px;height:22px;border-radius:50%;border:2px solid var(--wolf-text-muted);flex-shrink:0;margin-top:1px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.task-check.checked{background:var(--wolf-gold);border-color:var(--wolf-gold)}
-.task-check.checked::after{content:'✓';color:var(--wolf-black);font-size:0.8rem;font-weight:800}
+.task-check{width:24px;height:24px;border-radius:50%;border:2px solid var(--wolf-text-muted);flex-shrink:0;margin-top:1px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.18s cubic-bezier(.2,.9,.3,1.2);background:transparent;position:relative}
+.task-check:hover{border-color:var(--wolf-gold);box-shadow:0 0 0 3px var(--wolf-gold-whisper);transform:scale(1.05)}
+.task-check:active{transform:scale(0.88)}
+.task-check.checked{background:var(--wolf-gold);border-color:var(--wolf-gold);animation:checkPop 0.34s cubic-bezier(.2,.9,.3,1.3)}
+.task-check.checked::after{content:'✓';color:var(--wolf-black);font-size:0.9rem;font-weight:900;line-height:1}
+@keyframes checkPop{0%{transform:scale(0.6);opacity:0.4}55%{transform:scale(1.2);opacity:1}100%{transform:scale(1);opacity:1}}
+/* Task body hover (indicates tap-to-edit) */
+.task-body{flex:1;min-width:0;cursor:pointer;padding:2px 6px;border-radius:6px;transition:background 0.15s}
+.task-body:hover{background:var(--wolf-gold-whisper)}
 .task-item.done .task-title{text-decoration:line-through;color:var(--wolf-text-muted)}
 .task-body{flex:1;min-width:0}
 .task-title{font-size:0.82rem;font-weight:500;color:var(--wolf-text);margin-bottom:5px;line-height:1.35}
@@ -362,7 +368,12 @@ body.modal-open #main-app{overflow:hidden}
 .qa-kind.selected .k-label{color:var(--wolf-gold)}
 .qa-input,.qa-textarea{width:100%;padding:12px 14px;font-family:'Montserrat',sans-serif;font-size:0.85rem;background:var(--wolf-black);color:var(--wolf-text);border:1px solid var(--wolf-border);border-radius:10px;margin-bottom:8px;outline:none}
 .qa-textarea{resize:vertical;min-height:70px;font-family:'Montserrat',sans-serif}
-.qa-input:focus,.qa-textarea:focus{border-color:var(--wolf-gold)}
+.qa-input:focus,.qa-textarea:focus{border-color:var(--wolf-gold);box-shadow:0 0 0 3px var(--wolf-gold-whisper)}
+.signin-input:focus{box-shadow:0 0 0 3px var(--wolf-gold-whisper)}
+/* Consistent focus ring on ANY text input across the app */
+input:focus,textarea:focus{outline:none}
+.chat-input:focus{outline:none}
+button:focus-visible{outline:2px solid var(--wolf-gold);outline-offset:2px}
 .qa-row{display:flex;gap:8px;margin-bottom:8px}
 .qa-row .qa-input{margin-bottom:0}
 .qa-pill-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
@@ -1059,7 +1070,7 @@ body.modal-open #main-app{overflow:hidden}
 </div>
 
 <script>
-const FLOOR_BUILD = '2026-04-22-v5-datepicker';
+const FLOOR_BUILD = '2026-04-22-v6-polish';
 console.log('%c🦊 The Floor · build ' + FLOOR_BUILD, 'color:#D4AF37;font-weight:bold;font-size:12px');
 const SUPA_URL = 'https://pvxlouqzmwdcrvmnfqfu.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2eGxvdXF6bXdkY3J2bW5mcWZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2MjY0MzIsImV4cCI6MjA5MjIwMjQzMn0.q22RcLEhswJ_82BovoxBfOJFgMCPfz-cSbU0M9JlJew';
@@ -1699,6 +1710,7 @@ function taskHTML(t){
         ${t.priority==='routine' ? '<span>Routine</span>' : ''}
         ${t.due_date ? `<span>Due ${fmt(t.due_date)}${t.due_time ? ' · '+t.due_time.slice(0,5) : ''}</span>` : ''}
         ${schedBadge}
+        ${(t.created_at && (Date.now() - new Date(t.created_at).getTime()) < 60*60*1000) ? `<span style="color:var(--wolf-gold-bright);font-weight:700">✨ New</span>` : ''}
       </div>
     </div>
   </div>`;
@@ -1776,14 +1788,33 @@ async function clearCompletedTasks(){
 }
 
 async function toggleTask(id, wasDone){
+  // Optimistic UI — flip checkmark instantly, revert on error
+  const rows = document.querySelectorAll(`.task-item[data-id="${id}"]`);
+  rows.forEach(row => {
+    const chk = row.querySelector('.task-check');
+    if(!chk) return;
+    if(wasDone){ chk.classList.remove('checked'); row.classList.remove('done'); }
+    else { chk.classList.add('checked'); row.classList.add('done'); }
+  });
   try{
     const upd = { status: wasDone ? 'open' : 'done', updated_at: new Date().toISOString() };
     if(!wasDone) upd.completed_at = new Date().toISOString();
     else upd.completed_at = null;
-    await sb.from('floor_tasks').update(upd).eq('id', id);
+    const { error } = await sb.from('floor_tasks').update(upd).eq('id', id);
+    if(error) throw error;
     await writeAudit('task_toggle', wasDone ? 'Reopened task' : 'Completed task', { task_id: id });
     showToast(wasDone ? 'Task reopened' : 'Task complete ✓');
-  }catch(e){ showToast('Error','error'); }
+  }catch(e){
+    // Revert the optimistic change
+    rows.forEach(row => {
+      const chk = row.querySelector('.task-check');
+      if(!chk) return;
+      if(wasDone){ chk.classList.add('checked'); row.classList.add('done'); }
+      else { chk.classList.remove('checked'); row.classList.remove('done'); }
+    });
+    showToast('Error: ' + (e.message||''), 'error');
+    console.error('[toggleTask]', e);
+  }
 }
 
 // MESSAGES/CHAT
@@ -2889,10 +2920,16 @@ function togglePill(el, group){
   }
 }
 
+let submittingModal = false;
 async function submitModal(){
+  if(submittingModal) return; // guard against double-submit
   const title = (document.getElementById('modalTitle').value||'').trim();
   const notes = (document.getElementById('modalNotes').value||'').trim();
   if(!title){ showToast('Please enter a title','error'); return; }
+  submittingModal = true;
+  const saveBtn = document.querySelector('#addModal .qa-btn.primary');
+  const saveOriginalText = saveBtn ? saveBtn.innerHTML : '';
+  if(saveBtn){ saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…'; }
 
   try{
     const now = new Date().toISOString();
@@ -3021,7 +3058,13 @@ async function submitModal(){
 
     closeModal();
     showToast('Saved ✓');
-  }catch(e){ showToast('Save failed: ' + (e.message||''), 'error'); console.error(e); }
+  }catch(e){
+    showToast('Save failed: ' + (e.message||''), 'error');
+    console.error(e);
+  }finally{
+    submittingModal = false;
+    if(saveBtn){ saveBtn.disabled = false; saveBtn.innerHTML = saveOriginalText; }
+  }
 }
 
 // MEMBER EDIT (Admin)
