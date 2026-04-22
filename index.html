@@ -535,9 +535,13 @@ body.modal-open #main-app{overflow:hidden}
         </div>
       </div>
       <div class="card">
-        <div class="card-label"><i class="fa-solid fa-list-check"></i> Today's Tasks <span class="card-label-count" id="homeTaskCount">0</span></div>
-        <div id="homeTaskList"><div class="loading-dots">Loading…</div><!-- -->
-</div>
+        <div class="card-label"><i class="fa-solid fa-calendar-day"></i> Today's Tasks <span class="card-label-count" id="homeTaskCount">0</span></div>
+        <div id="homeTaskList"><div class="loading-dots">Loading…</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-label"><i class="fa-solid fa-forward"></i> Future Tasks <span class="card-label-count" id="homeFutureCount">0</span></div>
+        <div id="homeFutureList"><div class="loading-dots">Loading…</div></div>
         <button class="view-all-link" onclick="switchTab('tasks')">View all tasks →</button>
       </div>
       <div class="card" id="homeReqCard" style="display:none">
@@ -1507,12 +1511,48 @@ async function loadHome(){
     }
 
     const show = currentUser==='adam' ? allTasks : allTasks.filter(t=>taskHasAssignee(t, currentUser));
-    const openShow = show.filter(t=>t.status!=='done').slice(0,3);
-    setText('homeTaskCount', openShow.length);
-    const el = document.getElementById('homeTaskList');
-    if(el){
-      if(!openShow.length) el.innerHTML = emptyHTML('✅','All clear','No open tasks right now.', { label:'New Task', onclick:"openAddModal('task')" });
-      else { el.innerHTML = openShow.map(taskHTML).join(''); attachTaskSwipe(); }
+    const openAll = show.filter(t => t.status !== 'done');
+    const todayISO = new Date().toISOString().slice(0,10);
+
+    // "Today" = due today, scheduled today, OR overdue (all need attention now)
+    const todayList = openAll.filter(t => {
+      if(t.due_date && t.due_date <= todayISO) return true; // includes overdue
+      const sched = t.metadata && t.metadata.scheduled_date;
+      if(sched && sched === todayISO) return true;
+      return false;
+    });
+
+    // "Future" = dated for a future day OR undated open tasks
+    const futureList = openAll.filter(t => !todayList.includes(t));
+
+    // Sort today by: overdue first, then hot, then the rest
+    todayList.sort((a,b) => {
+      const aOver = a.due_date && a.due_date < todayISO ? -1 : 0;
+      const bOver = b.due_date && b.due_date < todayISO ? -1 : 0;
+      if(aOver !== bOver) return aOver - bOver;
+      const aHot = a.priority === 'hot' ? -1 : 0;
+      const bHot = b.priority === 'hot' ? -1 : 0;
+      return aHot - bHot;
+    });
+    // Sort future by due date asc (undated last)
+    futureList.sort((a,b) => {
+      const aD = a.due_date || a.metadata?.scheduled_date || '9999-99-99';
+      const bD = b.due_date || b.metadata?.scheduled_date || '9999-99-99';
+      return aD.localeCompare(bD);
+    });
+
+    setText('homeTaskCount', todayList.length);
+    setText('homeFutureCount', futureList.length);
+
+    const todayEl = document.getElementById('homeTaskList');
+    if(todayEl){
+      if(!todayList.length) todayEl.innerHTML = emptyHTML('✅','Nothing for today','Clear for today. Check Future tasks below.', { label:'New Task', onclick:"openAddModal('task')" });
+      else { todayEl.innerHTML = todayList.slice(0,5).map(taskHTML).join(''); attachTaskSwipe(); }
+    }
+    const futureEl = document.getElementById('homeFutureList');
+    if(futureEl){
+      if(!futureList.length) futureEl.innerHTML = emptyHTML('📭','Nothing upcoming','No future tasks on the horizon.', { label:'Plan Ahead', onclick:"openAddModal('task')" });
+      else { futureEl.innerHTML = futureList.slice(0,5).map(taskHTML).join(''); attachTaskSwipe(); }
     }
 
     setText('homeReqCount', reqs.length);
