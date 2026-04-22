@@ -302,12 +302,18 @@ body.role-adam .header-passkey{display:inline-flex}
 body.role-adam .admin-nav{display:flex}
 body.role-adam .only-adam{display:block!important}
 
-/* MODAL */
-.qa-modal{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);display:none;align-items:flex-end;justify-content:center}
+/* MODAL — stable, keyboard-aware, no jump */
+.qa-modal{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);display:none;align-items:flex-end;justify-content:center;overflow:hidden}
 .qa-modal.open{display:flex;animation:fadeIn 0.2s ease}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-.qa-sheet{width:100%;max-width:520px;max-height:90vh;overflow-y:auto;background:var(--wolf-charcoal);border-top:2px solid var(--wolf-gold);border-radius:20px 20px 0 0;padding:16px 16px 32px;animation:slideUp 0.25s ease}
+.qa-sheet{width:100%;max-width:520px;max-height:90vh;max-height:90dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;background:var(--wolf-charcoal);border-top:2px solid var(--wolf-gold);border-radius:20px 20px 0 0;padding:16px 16px calc(32px + env(safe-area-inset-bottom,0px));animation:slideUp 0.25s ease;contain:layout;scroll-padding-top:16px}
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+/* Lock body scroll when ANY modal is open so the backdrop can't drift */
+body.modal-open{overflow:hidden;touch-action:none}
+body.modal-open #main-app{overflow:hidden}
+/* Inputs inside modals on iOS: prevent zoom on focus */
+.qa-input,.qa-textarea,.signin-input,.persona-input{font-size:16px!important}
+.qa-sheet input[type="text"],.qa-sheet input[type="password"],.qa-sheet input[type="number"],.qa-sheet input[type="date"],.qa-sheet input[type="time"],.qa-sheet input[type="email"],.qa-sheet input[type="tel"],.qa-sheet textarea{font-size:16px}
 .qa-grab{width:40px;height:4px;background:var(--wolf-text-muted);border-radius:2px;margin:0 auto 16px}
 .qa-title{font-family:'Playfair Display',serif;font-weight:700;font-size:1.4rem;color:var(--wolf-gold-pale);text-align:center;margin-bottom:4px}
 .qa-sub{font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:2px;text-transform:uppercase;color:var(--wolf-text-dim);text-align:center;margin-bottom:18px}
@@ -589,6 +595,7 @@ body.role-adam .only-adam{display:block!important}
           <div class="chat-list" id="chatList"><div class="loading-dots">Loading…</div><!-- -->
 </div>
           <div class="chat-input-bar">
+            <button onclick="attachChatPhoto()" title="Attach photo" style="width:34px;height:34px;border-radius:8px;background:var(--wolf-slate);border:1px solid var(--wolf-border);color:var(--wolf-text-dim);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-camera"></i></button>
             <input class="chat-input" id="chatInput" placeholder="Message the floor…" onkeydown="if(event.key==='Enter')sendMessage()">
             <button class="chat-send" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
           </div>
@@ -941,6 +948,11 @@ body.role-adam .only-adam{display:block!important}
       <div class="qa-section-label">Amount ($)</div>
       <input class="qa-input" type="number" id="modalAmount" placeholder="0.00">
     </div>
+    <div id="modalPhotoSection" style="display:none">
+      <div class="qa-section-label">Photo (optional)</div>
+      <div id="modalPhotoPreview" style="display:none;margin-bottom:8px"></div>
+      <button type="button" onclick="attachModalPhoto()" style="width:100%;padding:12px;border-radius:10px;border:1px dashed var(--wolf-border-strong);background:transparent;color:var(--wolf-gold);font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;font-weight:700"><i class="fa-solid fa-camera"></i> <span id="modalPhotoBtnLabel">Attach Photo</span></button>
+    </div>
     <div id="modalSectionSection" style="display:none">
       <div class="qa-section-label">Category</div>
       <div class="qa-pill-row">
@@ -1148,6 +1160,7 @@ let currentFilter = 'all';
 let selectedKind = 'task';
 let selectedAssignees = []; // multi-assign array of user_keys
 let selectedPrio = 'normal';
+let modalPhotoUrl = null;
 let selectedShopCat = 'grocery';
 let currentVaultSection = 'house';
 
@@ -1588,11 +1601,12 @@ function renderChat(msgs){
     const d = new Date(m.created_at);
     const self = m.author === currentUser;
     const mem = MEMBERS[m.author] || {name:m.author,init:(m.author||'?')[0].toUpperCase(),cls:'adam'};
+    const photoHtml = m.photo_url ? `<a href="${esc(m.photo_url)}" target="_blank" style="display:block;margin-top:6px;border-radius:10px;overflow:hidden;max-width:260px"><img src="${esc(m.photo_url)}" alt="photo" style="width:100%;display:block;border-radius:10px" loading="lazy"></a>` : '';
     html += `<div class="chat-msg${self?' self':''}">
       ${!self ? `<div class="chat-av ${mem.cls}">${mem.init}</div>` : ''}
       <div class="chat-bubble-wrap">
         <div class="chat-meta ${mem.cls}"><span class="who">${mem.name}</span> · ${d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</div>
-        <div class="chat-bubble">${esc(m.body)}</div>
+        <div class="chat-bubble">${esc(m.body)}${photoHtml}</div>
       </div>
       ${self ? `<div class="chat-av ${mem.cls}">${mem.init}</div>` : ''}
     </div>`;
@@ -1601,14 +1615,23 @@ function renderChat(msgs){
   el.scrollTop = el.scrollHeight;
 }
 
-async function sendMessage(){
+async function sendMessage(photoUrl){
   const inp = document.getElementById('chatInput');
   const body = (inp.value||'').trim();
-  if(!body) return;
-  inp.value = '';
+  if(!body && !photoUrl) return;
+  if(inp) inp.value = '';
   try{
-    await sb.from('floor_messages').insert({ author: currentUser, body, created_at: new Date().toISOString() });
-  }catch(e){ showToast('Send failed','error'); }
+    await sb.from('floor_messages').insert({
+      author: currentUser,
+      body: body || '📸 Photo',
+      photo_url: photoUrl || null,
+      created_at: new Date().toISOString()
+    });
+  }catch(e){ showToast('Send failed','error'); console.error(e); }
+}
+
+function attachChatPhoto(){
+  pickAndUploadPhoto(url => { sendMessage(url); showToast('Photo sent ✓'); });
 }
 
 function switchWire(section, btn){
@@ -1675,6 +1698,7 @@ function reqHTML(r){
     </div>
     ${r.title ? `<div style="font-weight:600;color:var(--wolf-gold-pale);margin-bottom:4px">${amountHtml}${esc(r.title)}</div>` : ''}
     ${r.notes ? `<div class="request-note">${esc(r.notes)}</div>` : ''}
+    ${r.photo_url ? `<a href="${esc(r.photo_url)}" target="_blank" style="display:block;margin:4px 0 10px;border-radius:10px;overflow:hidden;max-width:320px"><img src="${esc(r.photo_url)}" alt="attachment" style="width:100%;display:block;border-radius:10px" loading="lazy"></a>` : ''}
     ${r.start_date ? `<div style="font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--wolf-gold);margin-bottom:6px">${fmt(r.start_date)}${r.end_date ? ' → '+fmt(r.end_date) : ''} ${r.timeoff_type ? '· '+r.timeoff_type : ''}</div>` : ''}
     ${isAdam && isPending ? `<div class="request-actions">
       <button class="request-btn no" onclick="handleReq('${r.id}','denied')"><i class="fa-solid fa-xmark"></i> Deny</button>
@@ -2049,16 +2073,48 @@ async function writeAudit(event_type, summary, metadata){
   }catch(e){ console.error('audit',e); }
 }
 
-// MODAL
+// MODAL helpers — body-lock for stable backdrop
+function lockBody(){ document.body.classList.add('modal-open'); }
+function unlockBody(){
+  // Only unlock if no modal is still open
+  const anyOpen = document.querySelectorAll('.qa-modal.open').length > 0;
+  if(!anyOpen) document.body.classList.remove('modal-open');
+}
+
 function openAddModal(kind){
   document.getElementById('addModal').classList.add('open');
+  lockBody();
   if(kind) setKind(kind);
+}
+
+function attachModalPhoto(){
+  pickAndUploadPhoto(url => {
+    modalPhotoUrl = url;
+    const prev = document.getElementById('modalPhotoPreview');
+    if(prev){
+      prev.style.display = 'block';
+      prev.innerHTML = `<div style="position:relative"><img src="${esc(url)}" style="width:100%;border-radius:10px;border:1px solid var(--wolf-border-strong);display:block"><button type="button" onclick="clearModalPhoto()" style="position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;border:none;background:rgba(0,0,0,0.75);color:#fff;cursor:pointer"><i class="fa-solid fa-xmark"></i></button></div>`;
+    }
+    const lbl = document.getElementById('modalPhotoBtnLabel');
+    if(lbl) lbl.textContent = 'Replace Photo';
+    showToast('Photo attached ✓');
+  });
+}
+
+function clearModalPhoto(){
+  modalPhotoUrl = null;
+  const prev = document.getElementById('modalPhotoPreview');
+  if(prev){ prev.style.display = 'none'; prev.innerHTML = ''; }
+  const lbl = document.getElementById('modalPhotoBtnLabel');
+  if(lbl) lbl.textContent = 'Attach Photo';
 }
 
 function closeModal(){
   document.getElementById('addModal').classList.remove('open');
+  unlockBody();
   document.getElementById('modalTitle').value = '';
   document.getElementById('modalNotes').value = '';
+  clearModalPhoto();
   const dt = document.getElementById('modalDate'); if(dt) dt.value = '';
   const tm = document.getElementById('modalTime'); if(tm) tm.value = '';
   const dd = document.getElementById('modalDueDate'); if(dd) dd.value = '';
@@ -2085,11 +2141,12 @@ function setKind(kind){
   if(el){ document.querySelectorAll('.qa-kind').forEach(k=>k.classList.remove('selected')); el.classList.add('selected'); }
   document.getElementById('modalDateSection').style.display = (kind==='event') ? '' : 'none';
   document.getElementById('modalDueSection').style.display = (kind==='task') ? '' : 'none';
-  document.getElementById('modalAssignSection').style.display = ['shop','note'].includes(kind) ? 'none' : '';
+  document.getElementById('modalAssignSection').style.display = ['shop','note','brainstorm'].includes(kind) ? 'none' : '';
   document.getElementById('modalPrioSection').style.display = (kind==='task') ? '' : 'none';
   document.getElementById('modalAmountSection').style.display = (kind==='request') ? '' : 'none';
+  document.getElementById('modalPhotoSection').style.display = (kind==='request') ? '' : 'none';
   document.getElementById('modalSectionSection').style.display = (kind==='shop') ? '' : 'none';
-  document.getElementById('modalNotesSection').style.display = (kind==='note' || kind==='request' || kind==='task') ? '' : 'none';
+  document.getElementById('modalNotesSection').style.display = (kind==='note' || kind==='request' || kind==='task' || kind==='brainstorm') ? '' : 'none';
 }
 
 function togglePill(el, group){
@@ -2198,10 +2255,11 @@ async function submitModal(){
         kind: amt > 0 ? 'approval' : 'general',
         status: 'pending',
         amount_cents: amt > 0 ? Math.round(amt * 100) : null,
+        photo_url: modalPhotoUrl || null,
         urgency: 'normal',
         created_at: now
       });
-      await writeAudit('request_submitted', 'Submitted request: ' + title, { amount: amt });
+      await writeAudit('request_submitted', 'Submitted request: ' + title, { amount: amt, photo: !!modalPhotoUrl });
     }
 
     closeModal();
@@ -2259,6 +2317,7 @@ function openMemberEdit(userKey){
   });
 
   document.getElementById('memberModal').classList.add('open');
+  lockBody();
 }
 
 async function loadRolesForPicker(){
@@ -2266,7 +2325,7 @@ async function loadRolesForPicker(){
   return data || [];
 }
 
-function closeMemberEdit(){ document.getElementById('memberModal').classList.remove('open'); }
+function closeMemberEdit(){ document.getElementById('memberModal').classList.remove('open'); unlockBody(); }
 
 function toggleMemPill(el, group){
   const sel = `.qa-pill[data-${group}]`;
@@ -2456,6 +2515,41 @@ async function sendHandoff(){
   }catch(e){ showToast('Failed to send','error'); }
 }
 
+// PHOTO UPLOAD via Supabase Storage (floor-photos bucket)
+async function uploadPhoto(file){
+  if(!file) return null;
+  if(file.size > 8 * 1024 * 1024){ throw new Error('Image must be under 8 MB'); }
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `${currentUser||'anon'}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+  const { error } = await sb.storage.from('floor-photos').upload(path, file, {
+    cacheControl: '3600',
+    upsert: false,
+    contentType: file.type || 'image/jpeg'
+  });
+  if(error) throw error;
+  const { data } = sb.storage.from('floor-photos').getPublicUrl(path);
+  return data?.publicUrl || null;
+}
+
+function pickAndUploadPhoto(onDone){
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.style.display = 'none';
+  document.body.appendChild(input);
+  input.onchange = async () => {
+    const f = input.files && input.files[0];
+    document.body.removeChild(input);
+    if(!f) return;
+    showToast('Uploading photo…');
+    try{
+      const url = await uploadPhoto(f);
+      if(url) onDone(url);
+    }catch(e){ showToast('Upload failed: ' + (e.message||''),'error'); console.error(e); }
+  };
+  input.click();
+}
+
 // UTILS
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
 function setText(id, val){ const el = document.getElementById(id); if(el) el.textContent = val; }
@@ -2545,10 +2639,12 @@ function openVaultEdit(id){
   // Delete button visibility
   document.getElementById('vaultDeleteBtn').style.display = editingVaultId ? '' : 'none';
   document.getElementById('vaultModal').classList.add('open');
+  lockBody();
 }
 
 function closeVaultEdit(){
   document.getElementById('vaultModal').classList.remove('open');
+  unlockBody();
   editingVaultId = null;
 }
 
@@ -2626,11 +2722,13 @@ async function openChangePassword(){
   document.getElementById('cpConfirm').value = '';
   showCpError('');
   document.getElementById('changePassModal').classList.add('open');
+  lockBody();
   setTimeout(()=>{ try{ (hasPw ? document.getElementById('cpCurrent') : document.getElementById('cpNew')).focus(); }catch(_){} }, 100);
 }
 
 function closeChangePassword(){
   document.getElementById('changePassModal').classList.remove('open');
+  unlockBody();
 }
 
 function showCpError(msg){
