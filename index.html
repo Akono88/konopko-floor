@@ -583,6 +583,11 @@ body.modal-open #main-app{overflow:hidden}
         </div>
         <div id="taskList" class="skel-init"><!-- skeleton injected on load -->
 </div>
+
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--wolf-border);display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="clearCompletedTasks()" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--wolf-border);background:var(--wolf-slate);color:var(--wolf-text-dim);font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:1.2px;text-transform:uppercase;cursor:pointer;font-weight:700"><i class="fa-solid fa-broom"></i> Clear Completed</button>
+          <button onclick="openAddModal('task')" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--wolf-gold);background:var(--wolf-gold-whisper);color:var(--wolf-gold);font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:1.2px;text-transform:uppercase;cursor:pointer;font-weight:700"><i class="fa-solid fa-plus"></i> New Task</button>
+        </div>
       </div>
     </div>
 
@@ -1033,7 +1038,7 @@ body.modal-open #main-app{overflow:hidden}
       </div>
     </div>
     <div class="qa-actions">
-      <button class="qa-btn" id="modalDeleteBtn" onclick="deleteEditingTask()" style="display:none;color:var(--wolf-danger);border-color:var(--wolf-danger);flex:1">Delete</button>
+      <button class="qa-btn" id="modalDeleteBtn" onclick="deleteEditingItem()" style="display:none;color:var(--wolf-danger);border-color:var(--wolf-danger);flex:1">Delete</button>
       <button class="qa-btn" onclick="closeModal()">Cancel</button>
       <button class="qa-btn primary" onclick="submitModal()"><i class="fa-solid fa-check"></i> Save</button>
     </div>
@@ -1232,7 +1237,9 @@ let selectedKind = 'task';
 let selectedAssignees = []; // multi-assign array of user_keys
 let selectedPrio = 'normal';
 let modalPhotoUrl = null;
-let editingTaskId = null; // when set, modal is in edit mode for this task
+let editingTaskId = null;
+let editingEventId = null;
+let editingRequestId = null;
 let selectedShopCat = 'grocery';
 let currentVaultSection = 'house';
 
@@ -1708,6 +1715,23 @@ function renderTaskList(tasks, filter){
   attachTaskSwipe();
 }
 
+async function clearCompletedTasks(){
+  const done = allTasks.filter(t => t.status === 'done');
+  if(!done.length){ showToast('No completed tasks to clear'); return; }
+  const scope = currentUser === 'adam' ? 'all' : 'your own';
+  const owned = currentUser === 'adam' ? done : done.filter(t => taskHasAssignee(t, currentUser) || t.created_by === currentUser);
+  if(!owned.length){ showToast('No completed tasks you can clear'); return; }
+  if(!confirm(`Delete ${owned.length} completed ${scope} task${owned.length===1?'':'s'}? This cannot be undone.`)) return;
+  try{
+    const ids = owned.map(t => t.id);
+    await sb.from('floor_tasks').delete().in('id', ids);
+    await writeAudit('tasks_cleared', `Cleared ${ids.length} completed tasks`, { count: ids.length });
+    showToast(`${ids.length} tasks cleared`);
+    await loadTasks();
+    await loadHome();
+  }catch(e){ showToast('Clear failed','error'); console.error(e); }
+}
+
 async function toggleTask(id, wasDone){
   try{
     const upd = { status: wasDone ? 'open' : 'done', updated_at: new Date().toISOString() };
@@ -1748,15 +1772,18 @@ function renderChat(msgs){
     const mem = MEMBERS[m.author] || {name:m.author,init:(m.author||'?')[0].toUpperCase(),cls:'adam'};
     const photoHtml = m.photo_url ? `<a href="${esc(m.photo_url)}" target="_blank" style="display:block;margin-top:6px;border-radius:10px;overflow:hidden;max-width:260px"><img src="${esc(m.photo_url)}" alt="photo" style="width:100%;display:block;border-radius:10px" loading="lazy"></a>` : '';
     const bodyHtml = renderWithMentions(m.body || '');
-    // Group consecutive messages from same author within 5 min
     const grouped = lastAuthor === m.author && (ts - lastTime) < GROUP_WINDOW;
     const avatarHtml = grouped ? `<div class="chat-av" style="visibility:hidden"></div>` : `<div class="chat-av ${mem.cls}">${mem.init}</div>`;
     const metaHtml = grouped ? '' : `<div class="chat-meta ${mem.cls}"><span class="who">${mem.name}</span> · ${d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</div>`;
+    // Allow deletion of own messages (or Adam can delete any)
+    const canDelete = self || currentUser === 'adam';
+    const delBtn = canDelete ? `<button onclick="deleteMessage('${m.id}')" title="Delete message" style="background:none;border:none;color:var(--wolf-text-muted);font-size:0.65rem;cursor:pointer;padding:3px;margin-left:4px;opacity:0.4;transition:opacity 0.15s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.4'"><i class="fa-solid fa-trash-can"></i></button>` : '';
     html += `<div class="chat-msg${self?' self':''}" style="${grouped?'margin-top:-4px':''}">
       ${!self ? avatarHtml : ''}
       <div class="chat-bubble-wrap">
         ${metaHtml}
-        <div class="chat-bubble">${bodyHtml}${photoHtml}</div>
+        <div class="chat-bubble">${bodyHtml}${photoHtml}${self?delBtn:''}</div>
+        ${!self && canDelete ? `<div style="text-align:left;margin-top:2px">${delBtn}</div>` : ''}
       </div>
       ${self ? avatarHtml : ''}
     </div>`;
@@ -1793,6 +1820,16 @@ function insertMention(name){
   const prefix = cur && !cur.endsWith(' ') ? cur + ' ' : cur;
   inp.value = prefix + '@' + name + ' ';
   inp.focus();
+}
+
+async function deleteMessage(id){
+  if(!confirm('Delete this message?')) return;
+  try{
+    await sb.from('floor_messages').delete().eq('id', id);
+    await writeAudit('message_deleted', 'Deleted chat message', { id });
+    showToast('Message deleted');
+    await loadMessages();
+  }catch(e){ showToast('Delete failed','error'); console.error(e); }
 }
 
 function switchWire(section, btn){
@@ -1849,6 +1886,7 @@ function reqHTML(r){
   const isAdam = currentUser === 'adam';
   const isPending = r.status === 'pending';
   const amountHtml = r.amount_cents ? `<span class="request-amount">$${(r.amount_cents/100).toFixed(0)}</span>` : '';
+  const canEdit = isPending && r.submitted_by === currentUser;
   return `<div class="request-item${isPending?' pending':''}">
     <div class="request-head">
       <div class="approval-who ${mem.cls}">${mem.init}</div>
@@ -1856,6 +1894,7 @@ function reqHTML(r){
         <div class="request-type"><i class="fa-solid fa-circle-exclamation"></i> ${esc(r.kind||'Request')} ${r.urgency ? '· ' + r.urgency : ''}</div>
         <div class="request-from">${mem.name} · ${relTime(r.created_at)}</div>
       </div>
+      ${canEdit ? `<button onclick="openRequestEdit('${r.id}')" title="Edit" style="background:none;border:1px solid var(--wolf-border);color:var(--wolf-text-muted);border-radius:6px;width:28px;height:28px;cursor:pointer;flex-shrink:0"><i class="fa-solid fa-pen-to-square" style="font-size:0.75rem"></i></button>` : ''}
     </div>
     ${r.title ? `<div style="font-weight:600;color:var(--wolf-gold-pale);margin-bottom:4px">${amountHtml}${esc(r.title)}</div>` : ''}
     ${r.notes ? `<div class="request-note">${esc(r.notes)}</div>` : ''}
@@ -2269,7 +2308,8 @@ function renderCalDayDetail(dateISO){
       }
       const t = e.all_day ? 'All day' : (e.start_time ? e.start_time.slice(0,5) : '');
       const who = (e.attendees && e.attendees.length) ? e.attendees[0] : (e.created_by || '');
-      return `<div class="cal-event">
+      const canEdit = currentUser === 'adam' || e.created_by === currentUser;
+      return `<div class="cal-event" ${canEdit ? `onclick="openEventEdit('${e.id}')" style="cursor:pointer"` : ''}>
         <span class="cal-time">${t}</span>
         <span class="cal-event-title">${esc(e.title)}</span>
         ${who ? `<span class="cal-event-who">${esc(who)}</span>` : ''}
@@ -2557,6 +2597,12 @@ function openTaskEdit(taskId){
   document.getElementById('modalDeleteBtn').style.display = '';
 }
 
+function deleteEditingItem(){
+  if(editingTaskId) return deleteEditingTask();
+  if(editingEventId) return deleteEditingEvent();
+  if(editingRequestId) return deleteEditingRequest();
+}
+
 async function deleteEditingTask(){
   if(!editingTaskId) return;
   if(!confirm('Delete this task? This cannot be undone.')) return;
@@ -2566,6 +2612,93 @@ async function deleteEditingTask(){
     closeModal();
     showToast('Task deleted');
     await loadTasks();
+    await loadHome();
+  }catch(e){ showToast('Delete failed','error'); console.error(e); }
+}
+
+async function openEventEdit(eventId){
+  try{
+    const { data: e } = await sb.from('floor_events').select('*').eq('id', eventId).single();
+    if(!e){ showToast('Event not found','error'); return; }
+    editingEventId = eventId;
+
+    document.querySelectorAll('.qa-pill[data-assign]').forEach(p => p.classList.remove('selected'));
+
+    document.getElementById('addModal').classList.add('open');
+    lockBody();
+    setKind('event');
+
+    const titleEl = document.querySelector('#addModal .qa-title');
+    if(titleEl) titleEl.textContent = 'Edit Event';
+    document.getElementById('modalTitle').value = e.title || '';
+    document.getElementById('modalDate').value = e.event_date || '';
+    document.getElementById('modalTime').value = e.start_time ? e.start_time.slice(0,5) : '';
+    const attendees = Array.isArray(e.attendees) ? e.attendees : [];
+    selectedAssignees = [...attendees];
+    attendees.forEach(a => {
+      const pill = document.querySelector(`.qa-pill[data-assign="${a}"]`);
+      if(pill) pill.classList.add('selected');
+    });
+
+    document.getElementById('modalDeleteBtn').style.display = '';
+  }catch(e){ showToast('Failed to load event','error'); console.error(e); }
+}
+
+async function deleteEditingEvent(){
+  if(!editingEventId) return;
+  if(!confirm('Delete this event? This cannot be undone.')) return;
+  try{
+    await sb.from('floor_events').delete().eq('id', editingEventId);
+    await writeAudit('event_deleted', 'Deleted event', { id: editingEventId });
+    closeModal();
+    showToast('Event deleted');
+    await loadCalendar();
+    if(calView === 'month') renderMonthCal();
+  }catch(e){ showToast('Delete failed','error'); console.error(e); }
+}
+
+async function openRequestEdit(reqId){
+  try{
+    const r = (allReqs || []).find(x => x.id === reqId) || null;
+    if(!r){ showToast('Request not found','error'); return; }
+    // Only the submitter can edit their pending request
+    if(r.submitted_by !== currentUser){ showToast('Only the submitter can edit','error'); return; }
+    if(r.status !== 'pending'){ showToast('Cannot edit a resolved request','error'); return; }
+    editingRequestId = reqId;
+
+    document.getElementById('addModal').classList.add('open');
+    lockBody();
+    setKind('request');
+
+    const titleEl = document.querySelector('#addModal .qa-title');
+    if(titleEl) titleEl.textContent = 'Edit Request';
+    document.getElementById('modalTitle').value = r.title || '';
+    document.getElementById('modalNotes').value = r.notes || '';
+    document.getElementById('modalAmount').value = r.amount_cents ? (r.amount_cents/100).toString() : '';
+    if(r.photo_url){
+      modalPhotoUrl = r.photo_url;
+      const prev = document.getElementById('modalPhotoPreview');
+      if(prev){
+        prev.style.display = 'block';
+        prev.innerHTML = `<div style="position:relative"><img src="${esc(r.photo_url)}" style="width:100%;border-radius:10px;border:1px solid var(--wolf-border-strong);display:block"><button type="button" onclick="clearModalPhoto()" style="position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;border:none;background:rgba(0,0,0,0.75);color:#fff;cursor:pointer"><i class="fa-solid fa-xmark"></i></button></div>`;
+      }
+      const lbl = document.getElementById('modalPhotoBtnLabel');
+      if(lbl) lbl.textContent = 'Replace Photo';
+    }
+
+    document.getElementById('modalDeleteBtn').style.display = '';
+  }catch(e){ showToast('Failed to load request','error'); console.error(e); }
+}
+
+async function deleteEditingRequest(){
+  if(!editingRequestId) return;
+  if(!confirm('Delete this request? This cannot be undone.')) return;
+  try{
+    await sb.from('floor_requests').delete().eq('id', editingRequestId);
+    await writeAudit('request_deleted', 'Deleted request', { id: editingRequestId });
+    closeModal();
+    showToast('Request deleted');
+    await loadRequests();
     await loadHome();
   }catch(e){ showToast('Delete failed','error'); console.error(e); }
 }
@@ -2596,6 +2729,8 @@ function closeModal(){
   document.getElementById('addModal').classList.remove('open');
   unlockBody();
   editingTaskId = null;
+  editingEventId = null;
+  editingRequestId = null;
   document.getElementById('modalDeleteBtn').style.display = 'none';
   const title = document.querySelector('#addModal .qa-title');
   if(title) title.textContent = 'New Entry';
@@ -2747,30 +2882,52 @@ async function submitModal(){
       const dateVal = document.getElementById('modalDate').value;
       const timeVal = document.getElementById('modalTime').value;
       const attendees = selectedAssignees.length ? selectedAssignees : [currentUser];
-      await sb.from('floor_events').insert({
-        title,
-        event_date: dateVal || new Date().toISOString().slice(0,10),
-        start_time: timeVal || null,
-        all_day: !timeVal,
-        attendees,
-        created_by: currentUser,
-        created_at: now
-      });
-      await writeAudit('event_created', 'Created event: ' + title, { attendees });
+      if(editingEventId){
+        await sb.from('floor_events').update({
+          title,
+          event_date: dateVal || new Date().toISOString().slice(0,10),
+          start_time: timeVal || null,
+          all_day: !timeVal,
+          attendees,
+          updated_at: now
+        }).eq('id', editingEventId);
+        await writeAudit('event_updated', 'Updated event: ' + title, { id: editingEventId });
+      } else {
+        await sb.from('floor_events').insert({
+          title,
+          event_date: dateVal || new Date().toISOString().slice(0,10),
+          start_time: timeVal || null,
+          all_day: !timeVal,
+          attendees,
+          created_by: currentUser,
+          created_at: now
+        });
+        await writeAudit('event_created', 'Created event: ' + title, { attendees });
+      }
     } else if(selectedKind === 'request'){
       const amt = parseFloat(document.getElementById('modalAmount').value) || 0;
-      await sb.from('floor_requests').insert({
-        title,
-        notes: notes || null,
-        submitted_by: currentUser,
-        kind: amt > 0 ? 'approval' : 'general',
-        status: 'pending',
-        amount_cents: amt > 0 ? Math.round(amt * 100) : null,
-        photo_url: modalPhotoUrl || null,
-        urgency: 'normal',
-        created_at: now
-      });
-      await writeAudit('request_submitted', 'Submitted request: ' + title, { amount: amt, photo: !!modalPhotoUrl });
+      if(editingRequestId){
+        await sb.from('floor_requests').update({
+          title,
+          notes: notes || null,
+          amount_cents: amt > 0 ? Math.round(amt * 100) : null,
+          photo_url: modalPhotoUrl || null
+        }).eq('id', editingRequestId);
+        await writeAudit('request_updated', 'Updated request: ' + title, { id: editingRequestId });
+      } else {
+        await sb.from('floor_requests').insert({
+          title,
+          notes: notes || null,
+          submitted_by: currentUser,
+          kind: amt > 0 ? 'approval' : 'general',
+          status: 'pending',
+          amount_cents: amt > 0 ? Math.round(amt * 100) : null,
+          photo_url: modalPhotoUrl || null,
+          urgency: 'normal',
+          created_at: now
+        });
+        await writeAudit('request_submitted', 'Submitted request: ' + title, { amount: amt, photo: !!modalPhotoUrl });
+      }
     }
 
     closeModal();
@@ -3513,7 +3670,7 @@ async function renderMorningBriefing(){
   </div>`;
 }
 
-// Task swipe-to-complete (touch + pointer)
+// Task swipe-to-complete with tap-to-edit coexistence
 function attachTaskSwipe(){
   const rows = document.querySelectorAll('.task-item:not([data-swipe-bound])');
   rows.forEach(row => {
@@ -3551,6 +3708,12 @@ function attachTaskSwipe(){
       if(!touching) return;
       touching = false;
       row.classList.remove('swiping','swipe-reveal');
+      // If any horizontal motion beyond 6px happened, mark it as a swipe
+      // so the synthesized click doesn't also fire (tap-to-edit would trigger).
+      if(horizontal && Math.abs(dx) > 6){
+        row.dataset.justSwiped = '1';
+        setTimeout(() => { row.dataset.justSwiped = '0'; }, 500);
+      }
       if(horizontal && dx > SWIPE_THRESHOLD){
         const id = row.dataset.id;
         row.classList.add('swipe-done');
@@ -3561,6 +3724,14 @@ function attachTaskSwipe(){
         row.style.transform = '';
       }
     }
+    // Capture-phase click blocker: if a swipe just happened, swallow the
+    // follow-up click so the task-body's onclick (edit) doesn't fire.
+    row.addEventListener('click', (e) => {
+      if(row.dataset.justSwiped === '1'){
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    }, true);
     row.addEventListener('touchstart', start, { passive: true });
     row.addEventListener('touchmove', move, { passive: false });
     row.addEventListener('touchend', end);
