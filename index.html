@@ -118,6 +118,10 @@ header h1{font-family:'Playfair Display',serif;font-weight:800;font-size:1.7rem;
 header .subtitle{font-family:'JetBrains Mono',monospace;font-size:0.55rem;font-weight:500;letter-spacing:3px;text-transform:uppercase;color:var(--wolf-text-gold)}
 header .clock{margin-top:6px;font-size:0.62rem;color:var(--wolf-text-dim);font-weight:500;letter-spacing:1.5px;text-transform:uppercase;font-family:'JetBrains Mono',monospace}
 .header-signout{position:absolute;top:20px;right:0;background:none;border:1px solid var(--wolf-border);color:var(--wolf-text-muted);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:0.7rem}
+.header-help{position:absolute;top:20px;right:84px;background:none;border:1px solid var(--wolf-border);color:var(--wolf-text-muted);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:0.7rem;transition:all 0.15s}
+.header-help:hover{color:var(--wolf-gold);border-color:var(--wolf-border-strong)}
+body.role-adam .header-help{right:84px}
+body:not(.role-adam) .header-help{right:42px}
 .header-passkey{position:absolute;top:20px;right:42px;background:none;border:1px solid var(--wolf-border);color:var(--wolf-text-muted);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:0.7rem;display:none;transition:all 0.15s}
 .header-passkey:hover{color:var(--wolf-gold);border-color:var(--wolf-border-strong)}
 body.role-adam .header-passkey{display:inline-flex}
@@ -503,6 +507,7 @@ button:focus-visible{outline:2px solid var(--wolf-gold);outline-offset:2px}
       <div class="subtitle" id="headerSubtitle">Household Operations</div>
       <div class="clock" id="appClock"></div>
       <span class="conn-dot" id="connDot" title="Realtime status">Live</span>
+      <button class="header-help" onclick="openHelp()" title="User guide"><i class="fa-solid fa-circle-question"></i></button>
       <button class="header-passkey" onclick="openChangePassword()" title="Change password"><i class="fa-solid fa-key"></i></button>
       <button class="header-signout" onclick="confirmSignOut()" title="Sign out"><i class="fa-solid fa-right-from-bracket"></i></button>
     </header>
@@ -1070,7 +1075,7 @@ button:focus-visible{outline:2px solid var(--wolf-gold);outline-offset:2px}
 </div>
 
 <script>
-const FLOOR_BUILD = '2026-04-22-v6-polish';
+const FLOOR_BUILD = '2026-04-22-v7-guide';
 console.log('%c🦊 The Floor · build ' + FLOOR_BUILD, 'color:#D4AF37;font-weight:bold;font-size:12px');
 const SUPA_URL = 'https://pvxlouqzmwdcrvmnfqfu.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2eGxvdXF6bXdkY3J2bW5mcWZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2MjY0MzIsImV4cCI6MjA5MjIwMjQzMn0.q22RcLEhswJ_82BovoxBfOJFgMCPfz-cSbU0M9JlJew';
@@ -3539,6 +3544,11 @@ window.addEventListener('offline', ()=>setConnState('offline'));
 // Sign-out confirmation (prevents accidental taps)
 function confirmSignOut(){
   if(confirm('Sign out of The Floor?')) signOut();
+}
+
+// Open user guide in a new tab
+function openHelp(){
+  window.open('https://github.com/Akono88/konopko-floor/blob/main/USER_GUIDE.md', '_blank', 'noopener');
 }
 
 // Send clock-in reminder to team via Wire chat (Adam only)
