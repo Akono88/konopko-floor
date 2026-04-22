@@ -1054,7 +1054,7 @@ body.modal-open #main-app{overflow:hidden}
 </div>
 
 <script>
-const FLOOR_BUILD = '2026-04-22-v3';
+const FLOOR_BUILD = '2026-04-22-v4-clockfix';
 console.log('%c🦊 The Floor · build ' + FLOOR_BUILD, 'color:#D4AF37;font-weight:bold;font-size:12px');
 const SUPA_URL = 'https://pvxlouqzmwdcrvmnfqfu.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2eGxvdXF6bXdkY3J2bW5mcWZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2MjY0MzIsImV4cCI6MjA5MjIwMjQzMn0.q22RcLEhswJ_82BovoxBfOJFgMCPfz-cSbU0M9JlJew';
@@ -1985,11 +1985,30 @@ async function handleReq(id, status){
 // SHIFTS
 async function loadShifts(){
   try{
-    const { data: active } = await sb.from('floor_shifts').select('*').eq('person',currentUser).is('clock_out_at',null).limit(1);
+    // Grab ALL open shifts for this user (not just one) — order by most recent
+    const { data: active } = await sb.from('floor_shifts').select('*')
+      .eq('person',currentUser).is('clock_out_at',null)
+      .order('clock_in_at',{ascending:false});
     if(active && active.length){
       activeShiftId = active[0].id;
       clockStart = new Date(active[0].clock_in_at);
       renderClockedIn();
+      // If there are multiple open shifts, clean up the older ones silently
+      if(active.length > 1){
+        console.warn(`[loadShifts] Found ${active.length} open shifts for ${currentUser}, closing older ones`);
+        const olderIds = active.slice(1).map(s => s.id);
+        const endTime = new Date().toISOString();
+        for(const id of olderIds){
+          try{
+            const older = active.find(s => s.id === id);
+            // duration_minutes is GENERATED — don't write it
+            await sb.from('floor_shifts').update({
+              clock_out_at: endTime,
+              notes: (older.notes || '') + ' [auto-closed: duplicate shift]'
+            }).eq('id', id);
+          }catch(_){}
+        }
+      }
     } else {
       activeShiftId = null;
       renderClockedOut();
@@ -2080,10 +2099,27 @@ async function clockIn(){
   if(!currentUser){ showToast('Not signed in','error'); return; }
   const geoInfo = document.getElementById('geoInfo');
   console.log('[clockIn] starting for', currentUser);
+
+  // Guard: if an open shift already exists for this user, close it first
+  try{
+    const { data: existing } = await sb.from('floor_shifts').select('id,clock_in_at')
+      .eq('person', currentUser).is('clock_out_at', null);
+    if(existing && existing.length > 0){
+      console.warn('[clockIn] found', existing.length, 'existing open shift(s) — auto-closing before new clock-in');
+      const nowIso = new Date().toISOString();
+      for(const s of existing){
+        // duration_minutes is GENERATED — don't write it
+        await sb.from('floor_shifts').update({
+          clock_out_at: nowIso,
+          notes: '[auto-closed: new clock-in]'
+        }).eq('id', s.id);
+      }
+    }
+  }catch(e){ console.warn('[clockIn] pre-close check failed:', e); }
+
   // INSTANT feedback — create the shift row immediately, fetch geo in background
   try{
     const now = new Date().toISOString();
-    // Note: clock_in_geo left NULL until we have a real value
     const { data, error } = await sb.from('floor_shifts').insert({
       person: currentUser,
       clock_in_at: now
@@ -2143,20 +2179,23 @@ async function clockOut(){
     const startTime = clockStart;
     const sid = activeShiftId;
     const dur = Math.floor((new Date(endTime) - clockStart) / 60000);
-    await sb.from('floor_shifts').update({
-      clock_out_at: endTime,
-      duration_minutes: dur
+    // duration_minutes is a GENERATED column in the DB — never include it in updates
+    const { error } = await sb.from('floor_shifts').update({
+      clock_out_at: endTime
     }).eq('id', activeShiftId);
-    await writeAudit('clock_out', `Clocked out (${dur}m)`, { shift_id: activeShiftId });
+    if(error){ console.error('[clockOut] update failed:', error); throw error; }
+    await writeAudit('clock_out', `Clocked out (${dur}m)`, { shift_id: sid });
     clockStart = null;
     activeShiftId = null;
     renderClockedOut();
-    showToast('Clocked out');
-    // Auto-handoff for staff
+    showToast('Clocked out ✓');
     if(currentUser !== 'adam' && dur >= 30){
       setTimeout(()=>triggerHandoff(startTime, endTime, sid), 400);
     }
-  }catch(e){ showToast('Clock-out failed','error'); }
+  }catch(e){
+    showToast('Clock-out failed: ' + (e.message||''), 'error');
+    console.error('[clockOut] error:', e);
+  }
 }
 
 function renderShiftHistory(shifts){
@@ -3675,8 +3714,25 @@ async function renderMorningBriefing(){
   }
 
   if(onClock.length){
-    const names = onClock.map(s => (MEMBERS[s.person]?.name || s.person) + (s.clock_in_geo === 'verified' ? ' ✓' : s.clock_in_geo === 'offsite' ? ' ⚠' : ''));
-    lines.push(`<div class="brief-line"><i class="fa-solid fa-circle-check"></i><div><strong>On the clock:</strong> ${names.join(', ')}</div></div>`);
+    // Dedupe by person — keep most recent clock_in_at
+    const byPerson = {};
+    for(const s of onClock){
+      if(!byPerson[s.person] || new Date(s.clock_in_at) > new Date(byPerson[s.person].clock_in_at)){
+        byPerson[s.person] = s;
+      }
+    }
+    const unique = Object.values(byPerson);
+    const nowMs = Date.now();
+    const names = unique.map(s => {
+      const nm = MEMBERS[s.person]?.name || s.person;
+      const geo = s.clock_in_geo === 'verified' ? ' ✓' : s.clock_in_geo === 'offsite' ? ' ⚠' : '';
+      const ageH = (nowMs - new Date(s.clock_in_at)) / (1000*60*60);
+      const stuck = ageH > 16 ? ` <span style="color:var(--wolf-danger);font-weight:700" title="${ageH.toFixed(0)}h — possibly stuck">⏰ ${ageH.toFixed(0)}h</span>` : '';
+      return nm + geo + stuck;
+    });
+    const dupeCount = onClock.length - unique.length;
+    const dupeNote = dupeCount > 0 ? ` <span style="color:var(--wolf-warning);font-family:'JetBrains Mono',monospace;font-size:0.6rem">· ${dupeCount} stuck shift${dupeCount===1?'':'s'}</span>` : '';
+    lines.push(`<div class="brief-line"><i class="fa-solid fa-circle-check"></i><div><strong>On the clock:</strong> ${names.join(', ')}${dupeNote}</div></div>`);
   } else {
     lines.push(`<div class="brief-line"><i class="fa-regular fa-circle"></i><div><em>No one on the clock right now</em></div></div>`);
   }
