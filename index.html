@@ -242,7 +242,30 @@ body.role-adam .header-passkey{display:inline-flex}
 .chat-input{flex:1;background:none;border:none;outline:none;color:var(--wolf-text);font-family:'Montserrat',sans-serif;font-size:0.82rem;padding:6px 4px}
 .chat-send{width:34px;height:34px;border-radius:8px;background:var(--wolf-gold);border:none;color:var(--wolf-black);cursor:pointer;display:flex;align-items:center;justify-content:center}
 
-/* CALENDAR */
+/* CALENDAR — month view */
+.cal-view-toggle{display:flex;gap:4px;padding:3px;background:var(--wolf-slate);border:1px solid var(--wolf-border);border-radius:8px;margin-bottom:10px}
+.cal-view-btn{flex:1;padding:8px 12px;border-radius:6px;border:none;background:none;font-family:'Montserrat',sans-serif;font-weight:700;font-size:0.62rem;letter-spacing:1px;text-transform:uppercase;color:var(--wolf-text-dim);cursor:pointer}
+.cal-view-btn.active{background:var(--wolf-gold);color:var(--wolf-black)}
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px}
+.cal-nav-btn{width:34px;height:34px;border-radius:8px;background:var(--wolf-slate);border:1px solid var(--wolf-border);color:var(--wolf-text);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cal-nav-btn:hover{border-color:var(--wolf-border-strong);color:var(--wolf-gold)}
+.cal-nav-title{font-family:'Playfair Display',serif;font-weight:700;font-size:1.1rem;color:var(--wolf-gold-pale);flex:1;text-align:center}
+.cal-nav-today{padding:6px 12px;border-radius:8px;background:var(--wolf-slate);border:1px solid var(--wolf-border);color:var(--wolf-text-dim);font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;cursor:pointer}
+.cal-month-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal-dow{font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wolf-text-muted);text-align:center;padding:4px 0;font-weight:700}
+.cal-cell{aspect-ratio:1;padding:4px;border-radius:6px;border:1px solid var(--wolf-border);background:var(--wolf-slate);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:2px;font-size:0.78rem;font-family:'JetBrains Mono',monospace;cursor:pointer;position:relative;transition:all 0.15s;overflow:hidden}
+.cal-cell:hover{border-color:var(--wolf-border-strong)}
+.cal-cell:active{transform:scale(0.94)}
+.cal-cell .cal-num{line-height:1}
+.cal-cell.other-month{opacity:0.35}
+.cal-cell.today{border-color:var(--wolf-gold);background:var(--wolf-gold-whisper);color:var(--wolf-gold-bright);font-weight:700}
+.cal-cell.selected{background:var(--wolf-gold);color:var(--wolf-black);border-color:var(--wolf-gold);font-weight:700}
+.cal-cell.kday-adam{background:rgba(212,175,55,0.15);border-color:rgba(212,175,55,0.35)}
+.cal-cell.kday-marta{background:#141419;color:var(--wolf-text-muted)}
+.cal-cell.kday-exchange{background:linear-gradient(90deg,rgba(212,175,55,0.18) 50%,#141419 50%)}
+.cal-cell-dots{display:flex;gap:2px;margin-top:2px;flex-wrap:wrap;justify-content:center}
+.cal-cell-dot{width:4px;height:4px;border-radius:50%;background:var(--wolf-gold)}
+.cal-cell.selected .cal-cell-dot{background:var(--wolf-black)}
 .cal-day{margin-top:12px;padding-top:12px;border-top:1px solid var(--wolf-border)}
 .cal-day:first-child{border-top:none;margin-top:0;padding-top:0}
 .cal-date-label{font-family:'Playfair Display',serif;font-weight:700;font-size:0.9rem;color:var(--wolf-gold-pale);margin-bottom:8px}
@@ -554,9 +577,27 @@ body.modal-open #main-app{overflow:hidden}
     <!-- CALENDAR -->
     <div class="tab-view" id="tab-calendar">
       <div class="card">
-        <div class="card-label"><i class="fa-solid fa-calendar"></i> This Week</div>
-        <div id="calList"><div class="loading-dots">Loading…</div><!-- -->
-</div>
+        <div class="card-label"><i class="fa-solid fa-calendar"></i> Calendar</div>
+
+        <div class="cal-view-toggle">
+          <button class="cal-view-btn active" data-view="month" onclick="switchCalView('month',this)"><i class="fa-solid fa-calendar-days"></i> Month</button>
+          <button class="cal-view-btn" data-view="week" onclick="switchCalView('week',this)"><i class="fa-regular fa-calendar"></i> Week</button>
+        </div>
+
+        <div id="calMonthView">
+          <div class="cal-nav">
+            <button class="cal-nav-btn" onclick="shiftMonth(-1)" aria-label="Previous month"><i class="fa-solid fa-chevron-left"></i></button>
+            <div class="cal-nav-title" id="calMonthTitle">—</div>
+            <button class="cal-nav-btn" onclick="shiftMonth(1)" aria-label="Next month"><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+          <button class="cal-nav-today" onclick="goToToday()" style="width:100%;margin-bottom:10px;padding:8px"><i class="fa-solid fa-location-crosshairs"></i> Today</button>
+          <div class="cal-month-grid" id="calMonthGrid"></div>
+          <div id="calDayDetail"></div>
+        </div>
+
+        <div id="calWeekView" style="display:none">
+          <div id="calList"><div class="loading-dots">Loading…</div></div>
+        </div>
       </div>
     </div>
 
@@ -931,14 +972,14 @@ body.modal-open #main-app{overflow:hidden}
       </div>
     </div>
     <div id="modalDateSection" style="display:none">
-      <div class="qa-section-label">Date &amp; Time</div>
+      <div class="qa-section-label" id="modalDateLabel">Date &amp; Time</div>
       <div class="qa-row">
-        <input class="qa-input" type="date" id="modalDate" style="margin-bottom:0">
+        <input class="qa-input" type="date" id="modalDate" style="margin-bottom:0" placeholder="Pick a date">
         <input class="qa-input" type="time" id="modalTime" style="margin-bottom:0">
       </div>
     </div>
     <div id="modalDueSection" style="display:none">
-      <div class="qa-section-label">Due (optional)</div>
+      <div class="qa-section-label">Due Date &amp; Time <span style="font-family:'Montserrat',sans-serif;font-size:0.6rem;font-weight:400;color:var(--wolf-text-muted);letter-spacing:0.3px;text-transform:none;margin-left:6px">· must be done by</span></div>
       <div class="qa-row">
         <input class="qa-input" type="date" id="modalDueDate" style="margin-bottom:0">
         <input class="qa-input" type="time" id="modalDueTime" style="margin-bottom:0">
@@ -1391,7 +1432,7 @@ function subscribeRealtime(){
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_shopping'},()=>loadShopping())
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_notes'},()=>loadNotes())
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_wiki'},()=>loadVault())
-      .on('postgres_changes',{event:'*',schema:'public',table:'floor_events'},()=>loadCalendar())
+      .on('postgres_changes',{event:'*',schema:'public',table:'floor_events'},()=>{ loadCalendar(); if(calView==='month') renderMonthCal(); })
       .subscribe((status)=>{
         if(status === 'SUBSCRIBED') setConnState('online');
         else if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setConnState('offline');
@@ -1410,6 +1451,8 @@ function switchTab(name, btn){
   if(tab) tab.classList.add('active');
   if(btn) btn.classList.add('active');
   else { const nb = document.querySelector('[data-tab="'+name+'"]'); if(nb) nb.classList.add('active'); }
+  // Lazy-render Calendar month on first open or tab re-open
+  if(name === 'calendar' && calView === 'month') renderMonthCal();
 }
 
 // Toast
@@ -1866,7 +1909,179 @@ function renderShiftHistory(shifts){
   }).join('');
 }
 
-// CALENDAR
+// CALENDAR — month view + week list
+let calView = 'month';
+let calMonthDate = new Date();
+let calSelectedDate = null;
+let calMonthEvents = {};
+
+function switchCalView(view, btn){
+  calView = view;
+  document.querySelectorAll('.cal-view-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  document.getElementById('calMonthView').style.display = view === 'month' ? '' : 'none';
+  document.getElementById('calWeekView').style.display = view === 'week' ? '' : 'none';
+  if(view === 'month') renderMonthCal();
+}
+
+function shiftMonth(delta){
+  calMonthDate = new Date(calMonthDate.getFullYear(), calMonthDate.getMonth() + delta, 1);
+  renderMonthCal();
+}
+
+function goToToday(){
+  calMonthDate = new Date();
+  calSelectedDate = new Date().toISOString().slice(0,10);
+  renderMonthCal();
+}
+
+async function renderMonthCal(){
+  const titleEl = document.getElementById('calMonthTitle');
+  const gridEl = document.getElementById('calMonthGrid');
+  const detailEl = document.getElementById('calDayDetail');
+  if(!titleEl || !gridEl) return;
+
+  const year = calMonthDate.getFullYear();
+  const month = calMonthDate.getMonth();
+
+  titleEl.textContent = calMonthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  // Fetch events for this month
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startISO = firstDay.toISOString().slice(0,10);
+  const endISO = lastDay.toISOString().slice(0,10);
+  try{
+    const { data } = await sb.from('floor_events').select('*')
+      .gte('event_date', startISO).lte('event_date', endISO);
+    calMonthEvents = {};
+    for(const e of (data||[])){
+      if(!calMonthEvents[e.event_date]) calMonthEvents[e.event_date] = [];
+      calMonthEvents[e.event_date].push(e);
+    }
+  }catch(_){ calMonthEvents = {}; }
+
+  const firstDow = firstDay.getDay();
+  const daysInMonth = lastDay.getDate();
+  const prevLastDay = new Date(year, month, 0).getDate();
+  const todayISO = new Date().toISOString().slice(0,10);
+
+  const dow = ['S','M','T','W','T','F','S'];
+  let html = dow.map(d => `<div class="cal-dow">${d}</div>`).join('');
+
+  // Prev-month trailing days
+  for(let i = firstDow - 1; i >= 0; i--){
+    const d = new Date(year, month - 1, prevLastDay - i);
+    const dateISO = d.toISOString().slice(0,10);
+    html += `<div class="cal-cell other-month" onclick="pickCalDay('${dateISO}')"><span class="cal-num">${prevLastDay - i}</span></div>`;
+  }
+
+  // Current month
+  for(let d = 1; d <= daysInMonth; d++){
+    const dateObj = new Date(year, month, d);
+    // Use local date formatting to avoid timezone shift
+    const dateISO = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const kDay = (typeof getKaleesiDay === 'function') ? getKaleesiDay(dateISO) : null;
+    const events = calMonthEvents[dateISO] || [];
+    const isToday = dateISO === todayISO;
+    const isSelected = dateISO === calSelectedDate;
+
+    const classes = ['cal-cell'];
+    if(isToday) classes.push('today');
+    if(isSelected) classes.push('selected');
+    if(kDay){
+      if(kDay.type === 'exchange') classes.push('kday-exchange');
+      else if(typeof isAdamCustody === 'function' && isAdamCustody(kDay)) classes.push('kday-adam');
+      else classes.push('kday-marta');
+    }
+
+    let dotsHtml = '';
+    if(events.length){
+      const n = Math.min(events.length, 3);
+      dotsHtml = '<div class="cal-cell-dots">' + '<span class="cal-cell-dot"></span>'.repeat(n) + '</div>';
+    }
+    html += `<div class="${classes.join(' ')}" onclick="pickCalDay('${dateISO}')"><span class="cal-num">${d}</span>${dotsHtml}</div>`;
+  }
+
+  // Next-month leading days (fill to 6 rows = 42 cells)
+  const totalCells = firstDow + daysInMonth;
+  const trailing = (Math.ceil(totalCells / 7) * 7) - totalCells;
+  for(let i = 1; i <= trailing; i++){
+    const d = new Date(year, month + 1, i);
+    const dateISO = d.toISOString().slice(0,10);
+    html += `<div class="cal-cell other-month" onclick="pickCalDay('${dateISO}')"><span class="cal-num">${i}</span></div>`;
+  }
+
+  gridEl.innerHTML = html;
+
+  // Render selected day detail if one is set
+  if(calSelectedDate) renderCalDayDetail(calSelectedDate);
+  else if(detailEl) detailEl.innerHTML = '';
+}
+
+function pickCalDay(dateISO){
+  calSelectedDate = dateISO;
+  // Jump month if selecting from other-month row
+  const d = new Date(dateISO + 'T12:00:00');
+  if(d.getMonth() !== calMonthDate.getMonth() || d.getFullYear() !== calMonthDate.getFullYear()){
+    calMonthDate = new Date(d.getFullYear(), d.getMonth(), 1);
+    renderMonthCal();
+  } else {
+    document.querySelectorAll('.cal-cell.selected').forEach(c => c.classList.remove('selected'));
+    renderCalDayDetail(dateISO);
+    // Re-render to apply selected state without full fetch
+    const gridEl = document.getElementById('calMonthGrid');
+    if(gridEl){
+      // Simple approach: re-render from cache
+      renderMonthCal();
+    }
+  }
+}
+
+function renderCalDayDetail(dateISO){
+  const detailEl = document.getElementById('calDayDetail');
+  if(!detailEl) return;
+  const d = new Date(dateISO + 'T12:00:00');
+  const events = calMonthEvents[dateISO] || [];
+  const kDay = (typeof getKaleesiDay === 'function') ? getKaleesiDay(dateISO) : null;
+
+  let badgeHtml = '';
+  if(kDay){
+    if(kDay.type === 'exchange'){
+      badgeHtml = `<span style="margin-left:8px;padding:2px 8px;border-radius:8px;background:rgba(212,175,55,0.18);color:var(--wolf-gold);font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:1.5px;text-transform:uppercase;border:1px solid var(--wolf-border-strong)">🔄 Exchange ${kDay.exchangeTime||''}</span>`;
+    } else if(typeof isAdamCustody === 'function' && isAdamCustody(kDay)){
+      badgeHtml = `<span style="margin-left:8px;padding:2px 8px;border-radius:8px;background:rgba(212,175,55,0.18);color:var(--wolf-gold);font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:1.5px;text-transform:uppercase;border:1px solid var(--wolf-border-strong)">🦋 Kaleesi</span>`;
+    } else {
+      badgeHtml = `<span style="margin-left:8px;padding:2px 8px;border-radius:8px;background:var(--wolf-slate);color:var(--wolf-text-muted);font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:1.5px;text-transform:uppercase">Marta</span>`;
+    }
+  }
+
+  let html = `<div class="cal-day"><div class="cal-date-label">${d.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}${badgeHtml}</div>`;
+
+  if(events.length){
+    html += events.map(e => {
+      const t = e.all_day ? 'All day' : (e.start_time ? e.start_time.slice(0,5) : '');
+      const who = (e.attendees && e.attendees.length) ? e.attendees[0] : (e.created_by || '');
+      return `<div class="cal-event">
+        <span class="cal-time">${t}</span>
+        <span class="cal-event-title">${esc(e.title)}</span>
+        ${who ? `<span class="cal-event-who">${esc(who)}</span>` : ''}
+      </div>`;
+    }).join('');
+  } else {
+    html += `<div style="padding:8px 10px;color:var(--wolf-text-muted);font-size:0.75rem">No events this day</div>`;
+  }
+
+  html += `<button onclick="openAddModalForDate('${dateISO}')" style="display:block;width:100%;margin-top:10px;padding:10px;border-radius:10px;border:1px dashed var(--wolf-border-strong);background:transparent;color:var(--wolf-gold);font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;font-weight:700"><i class="fa-solid fa-plus"></i> Add Event for This Day</button></div>`;
+
+  detailEl.innerHTML = html;
+}
+
+function openAddModalForDate(dateISO){
+  openAddModal('event');
+  setTimeout(() => { const inp = document.getElementById('modalDate'); if(inp) inp.value = dateISO; }, 60);
+}
+
 async function loadCalendar(){
   try{
     const today = new Date();
@@ -2139,7 +2354,13 @@ function setKind(kind){
   selectedKind = kind;
   const el = document.querySelector(`.qa-kind[data-kind="${kind}"]`);
   if(el){ document.querySelectorAll('.qa-kind').forEach(k=>k.classList.remove('selected')); el.classList.add('selected'); }
-  document.getElementById('modalDateSection').style.display = (kind==='event') ? '' : 'none';
+  // Show "Date" section for both tasks (scheduled/when) and events
+  document.getElementById('modalDateSection').style.display = (kind==='event' || kind==='task') ? '' : 'none';
+  const dateLabel = document.getElementById('modalDateLabel');
+  if(dateLabel){
+    if(kind === 'task') dateLabel.innerHTML = 'Scheduled Date &amp; Time <span style="font-family:\'Montserrat\',sans-serif;font-size:0.6rem;font-weight:400;color:var(--wolf-text-muted);letter-spacing:0.3px;text-transform:none;margin-left:6px">· when to do it</span>';
+    else dateLabel.textContent = 'Date & Time';
+  }
   document.getElementById('modalDueSection').style.display = (kind==='task') ? '' : 'none';
   document.getElementById('modalAssignSection').style.display = ['shop','note','brainstorm'].includes(kind) ? 'none' : '';
   document.getElementById('modalPrioSection').style.display = (kind==='task') ? '' : 'none';
@@ -2185,6 +2406,11 @@ async function submitModal(){
       const meta = {};
       if(notes) meta.notes = notes;
       if(assignees.length > 1) meta.assignees = assignees;
+      // Scheduled ("when") date+time for the task — stored in metadata
+      const schedDate = document.getElementById('modalDate').value || null;
+      const schedTime = document.getElementById('modalTime').value || null;
+      if(schedDate) meta.scheduled_date = schedDate;
+      if(schedTime) meta.scheduled_time = schedTime;
       const dueDate = document.getElementById('modalDueDate').value || null;
       const dueTime = document.getElementById('modalDueTime').value || null;
       await sb.from('floor_tasks').insert({
