@@ -323,6 +323,14 @@ body.role-adam .header-passkey{display:inline-flex}
 .nav-btn.active i{filter:drop-shadow(0 0 6px rgba(212,175,55,0.6))}
 .admin-nav{display:none}
 body.role-adam .admin-nav{display:flex}
+/* Nav badges */
+.nav-btn{position:relative}
+.nav-badge{position:absolute;top:6px;left:calc(50% + 4px);background:var(--wolf-danger);color:#fff;font-size:0.5rem;min-width:14px;height:14px;border-radius:8px;padding:0 4px;display:none;align-items:center;justify-content:center;font-weight:800;font-family:'JetBrains Mono',monospace;letter-spacing:0;border:1.5px solid var(--wolf-black);line-height:1;box-shadow:0 0 0 1px var(--wolf-danger)}
+.nav-badge.show{display:flex}
+.nav-badge.warn{background:var(--wolf-warning);color:var(--wolf-black);box-shadow:0 0 0 1px var(--wolf-warning)}
+@media(min-width:900px){
+  .nav-badge{top:10px;left:28px;right:auto}
+}
 body.role-adam .only-adam{display:block!important}
 
 /* MODAL — stable, keyboard-aware, no jump */
@@ -664,8 +672,13 @@ body.modal-open #main-app{overflow:hidden}
     <div class="tab-view" id="tab-requests">
       <div class="card">
         <div class="card-label"><i class="fa-solid fa-inbox"></i> Requests <span class="card-label-count" id="reqBadge">0</span></div>
-        <div id="reqList"><div class="loading-dots">Loading…</div><!-- -->
-</div>
+        <div class="filter-row" id="reqFilterRow">
+          <button class="filter-chip active" data-reqfilter="pending" onclick="filterRequests(this)">Pending</button>
+          <button class="filter-chip" data-reqfilter="approved" onclick="filterRequests(this)">Approved</button>
+          <button class="filter-chip" data-reqfilter="denied" onclick="filterRequests(this)">Denied</button>
+          <button class="filter-chip" data-reqfilter="all" onclick="filterRequests(this)">All</button>
+        </div>
+        <div id="reqList"><div class="loading-dots">Loading…</div></div>
       </div>
     </div>
 
@@ -699,10 +712,17 @@ body.modal-open #main-app{overflow:hidden}
           </button>
         </div>
 
+        <div id="shiftSummary" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--wolf-border);display:none">
+          <div class="sub-head">This Week</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px">
+            <div class="perf-stat"><div class="num" id="shiftThisWeek">—</div><div class="lbl">Hours</div></div>
+            <div class="perf-stat"><div class="num" id="shiftThisWeekCount">—</div><div class="lbl">Shifts</div></div>
+            <div class="perf-stat"><div class="num" id="shiftLastWeek">—</div><div class="lbl">Last Week</div></div>
+          </div>
+        </div>
         <div style="margin-top:12px">
           <div class="sub-head">Recent Shifts</div>
-          <div id="shiftHistory"><div class="loading-dots">Loading…</div><!-- -->
-</div>
+          <div id="shiftHistory"><div class="loading-dots">Loading…</div></div>
         </div>
       </div>
     </div>
@@ -752,11 +772,11 @@ body.modal-open #main-app{overflow:hidden}
 
   <nav class="bottom-nav">
     <button class="nav-btn active" data-tab="home" onclick="switchTab('home',this)"><i class="fa-solid fa-house"></i><span>Home</span></button>
-    <button class="nav-btn" data-tab="tasks" onclick="switchTab('tasks',this)"><i class="fa-solid fa-list-check"></i><span>Tasks</span></button>
+    <button class="nav-btn" data-tab="tasks" onclick="switchTab('tasks',this)"><i class="fa-solid fa-list-check"></i><span>Tasks</span><span class="nav-badge" id="badge-tasks">0</span></button>
     <button class="nav-btn" data-tab="calendar" onclick="switchTab('calendar',this)"><i class="fa-solid fa-calendar"></i><span>Cal</span></button>
     <button class="nav-btn" data-tab="vault" onclick="switchTab('vault',this)"><i class="fa-solid fa-vault"></i><span>Vault</span></button>
     <button class="nav-btn" data-tab="wire" onclick="switchTab('wire',this)"><i class="fa-solid fa-satellite-dish"></i><span>Wire</span></button>
-    <button class="nav-btn" data-tab="requests" onclick="switchTab('requests',this)"><i class="fa-solid fa-inbox"></i><span>Ask</span></button>
+    <button class="nav-btn" data-tab="requests" onclick="switchTab('requests',this)"><i class="fa-solid fa-inbox"></i><span>Ask</span><span class="nav-badge" id="badge-requests">0</span></button>
     <button class="nav-btn" data-tab="shifts" onclick="switchTab('shifts',this)"><i class="fa-solid fa-clock"></i><span>Shift</span></button>
     <button class="nav-btn admin-nav" data-tab="admin" onclick="switchTab('admin',this)"><i class="fa-solid fa-crown"></i><span>Admin</span></button>
   </nav>
@@ -1013,6 +1033,7 @@ body.modal-open #main-app{overflow:hidden}
       </div>
     </div>
     <div class="qa-actions">
+      <button class="qa-btn" id="modalDeleteBtn" onclick="deleteEditingTask()" style="display:none;color:var(--wolf-danger);border-color:var(--wolf-danger);flex:1">Delete</button>
       <button class="qa-btn" onclick="closeModal()">Cancel</button>
       <button class="qa-btn primary" onclick="submitModal()"><i class="fa-solid fa-check"></i> Save</button>
     </div>
@@ -1211,6 +1232,7 @@ let selectedKind = 'task';
 let selectedAssignees = []; // multi-assign array of user_keys
 let selectedPrio = 'normal';
 let modalPhotoUrl = null;
+let editingTaskId = null; // when set, modal is in edit mode for this task
 let selectedShopCat = 'grocery';
 let currentVaultSection = 'house';
 
@@ -1468,6 +1490,23 @@ function switchTab(name, btn){
   if(name === 'calendar' && calView === 'month') renderMonthCal();
 }
 
+// Nav badges — show pending counts on relevant tabs
+function refreshNavBadges(todayTaskCount, pendingRequestCount){
+  const setBadge = (id, count, type) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(count > 0){
+      el.textContent = count > 99 ? '99+' : count;
+      el.classList.add('show');
+      el.classList.toggle('warn', type === 'warn');
+    } else {
+      el.classList.remove('show');
+    }
+  };
+  setBadge('badge-tasks', todayTaskCount || 0, 'warn');
+  setBadge('badge-requests', pendingRequestCount || 0);
+}
+
 // Toast
 let toastT;
 function showToast(msg, type=''){
@@ -1543,6 +1582,7 @@ async function loadHome(){
 
     setText('homeTaskCount', todayList.length);
     setText('homeFutureCount', futureList.length);
+    refreshNavBadges(todayList.length, reqs.length);
 
     const todayEl = document.getElementById('homeTaskList');
     if(todayEl){
@@ -1597,15 +1637,18 @@ function taskHTML(t){
     const mem = MEMBERS[a] || { name: a };
     return `<span class="task-assignee ${a}">${esc(mem.name||a)}</span>`;
   }).join(' ');
+  const schedDate = t.metadata && t.metadata.scheduled_date;
+  const schedBadge = schedDate ? `<span style="color:var(--wolf-gold)">📅 ${fmt(schedDate)}</span>` : '';
   return `<div class="task-item${done?' done':''}" data-id="${t.id}">
-    <div class="task-check${done?' checked':''}" onclick="toggleTask('${t.id}',${done})"></div>
-    <div class="task-body">
+    <div class="task-check${done?' checked':''}" onclick="event.stopPropagation();toggleTask('${t.id}',${done})"></div>
+    <div class="task-body" onclick="openTaskEdit('${t.id}')">
       <div class="task-title">${esc(t.title)}</div>
       <div class="task-meta">
         ${pillsHtml}
         ${t.priority==='hot' ? '<span class="urgent-flag"><i class="fa-solid fa-fire"></i> Hot</span>' : ''}
         ${t.priority==='routine' ? '<span>Routine</span>' : ''}
-        ${t.due_date ? `<span>${fmt(t.due_date)}${t.due_time ? ' · '+t.due_time.slice(0,5) : ''}</span>` : ''}
+        ${t.due_date ? `<span>Due ${fmt(t.due_date)}${t.due_time ? ' · '+t.due_time.slice(0,5) : ''}</span>` : ''}
+        ${schedBadge}
       </div>
     </div>
   </div>`;
@@ -1689,20 +1732,36 @@ function renderChat(msgs){
   if(!el) return;
   if(!msgs.length){ el.innerHTML = emptyHTML('💬','No messages yet','Be the first to post.', { label:'Open Chat', onclick:"document.getElementById('chatInput').focus()" }); return; }
   let html = '';
+  let lastDate = '';
+  let lastAuthor = null;
+  let lastTime = 0;
+  const GROUP_WINDOW = 5 * 60 * 1000;
   for(const m of msgs){
     const d = new Date(m.created_at);
+    const ts = d.getTime();
+    const dStr = d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+    if(dStr !== lastDate){
+      html += `<div class="chat-date-sep">${dStr}</div>`;
+      lastDate = dStr; lastAuthor = null; lastTime = 0;
+    }
     const self = m.author === currentUser;
     const mem = MEMBERS[m.author] || {name:m.author,init:(m.author||'?')[0].toUpperCase(),cls:'adam'};
     const photoHtml = m.photo_url ? `<a href="${esc(m.photo_url)}" target="_blank" style="display:block;margin-top:6px;border-radius:10px;overflow:hidden;max-width:260px"><img src="${esc(m.photo_url)}" alt="photo" style="width:100%;display:block;border-radius:10px" loading="lazy"></a>` : '';
     const bodyHtml = renderWithMentions(m.body || '');
-    html += `<div class="chat-msg${self?' self':''}">
-      ${!self ? `<div class="chat-av ${mem.cls}">${mem.init}</div>` : ''}
+    // Group consecutive messages from same author within 5 min
+    const grouped = lastAuthor === m.author && (ts - lastTime) < GROUP_WINDOW;
+    const avatarHtml = grouped ? `<div class="chat-av" style="visibility:hidden"></div>` : `<div class="chat-av ${mem.cls}">${mem.init}</div>`;
+    const metaHtml = grouped ? '' : `<div class="chat-meta ${mem.cls}"><span class="who">${mem.name}</span> · ${d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</div>`;
+    html += `<div class="chat-msg${self?' self':''}" style="${grouped?'margin-top:-4px':''}">
+      ${!self ? avatarHtml : ''}
       <div class="chat-bubble-wrap">
-        <div class="chat-meta ${mem.cls}"><span class="who">${mem.name}</span> · ${d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</div>
+        ${metaHtml}
         <div class="chat-bubble">${bodyHtml}${photoHtml}</div>
       </div>
-      ${self ? `<div class="chat-av ${mem.cls}">${mem.init}</div>` : ''}
+      ${self ? avatarHtml : ''}
     </div>`;
+    lastAuthor = m.author;
+    lastTime = ts;
   }
   el.innerHTML = html;
   el.scrollTop = el.scrollHeight;
@@ -1809,13 +1868,38 @@ function reqHTML(r){
   </div>`;
 }
 
+let reqFilter = 'pending';
+function filterRequests(btn){
+  document.querySelectorAll('#reqFilterRow .filter-chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  reqFilter = btn.dataset.reqfilter;
+  renderReqs(allReqs);
+}
+
 function renderReqs(reqs){
   const pending = reqs.filter(r=>r.status==='pending');
   setText('reqBadge', pending.length);
   const el = document.getElementById('reqList');
   if(!el) return;
-  if(!reqs.length){ el.innerHTML = emptyHTML('📭','No requests','All clear.', { label:'New Request', onclick:"openAddModal('request')" }); return; }
-  el.innerHTML = reqs.map(reqHTML).join('');
+
+  let filtered = reqs;
+  if(reqFilter === 'pending') filtered = reqs.filter(r => r.status === 'pending');
+  else if(reqFilter === 'approved') filtered = reqs.filter(r => r.status === 'approved');
+  else if(reqFilter === 'denied') filtered = reqs.filter(r => r.status === 'denied');
+  // 'all' shows everything
+
+  if(!filtered.length){
+    const emptyMessages = {
+      'pending': { icon:'📭', title:'No pending requests', sub:'Inbox is clear.' },
+      'approved': { icon:'✅', title:'No approved requests yet', sub:'Approvals show up here.' },
+      'denied': { icon:'✗', title:'No denied requests', sub:'Nothing rejected.' },
+      'all': { icon:'📭', title:'No requests', sub:'All clear.' }
+    };
+    const m = emptyMessages[reqFilter] || emptyMessages.all;
+    el.innerHTML = emptyHTML(m.icon, m.title, m.sub, { label:'New Request', onclick:"openAddModal('request')" });
+    return;
+  }
+  el.innerHTML = filtered.map(reqHTML).join('');
 }
 
 async function handleReq(id, status){
@@ -1844,9 +1928,39 @@ async function loadShifts(){
     }
     const { data: hist } = await sb.from('floor_shifts').select('*')
       .eq('person',currentUser).not('clock_out_at','is',null)
-      .order('clock_in_at',{ascending:false}).limit(10);
+      .order('clock_in_at',{ascending:false}).limit(30);
     renderShiftHistory(hist||[]);
+    renderShiftSummary(hist||[]);
   }catch(e){ console.error('loadShifts',e); }
+}
+
+function renderShiftSummary(shifts){
+  const summaryEl = document.getElementById('shiftSummary');
+  if(!summaryEl) return;
+  if(!shifts.length){ summaryEl.style.display = 'none'; return; }
+  summaryEl.style.display = 'block';
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  startOfWeek.setHours(0,0,0,0);
+  startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
+  const startOfLast = new Date(startOfWeek);
+  startOfLast.setDate(startOfLast.getDate() - 7);
+
+  let thisWeekMin = 0, thisWeekCount = 0, lastWeekMin = 0;
+  for(const s of shifts){
+    if(!s.duration_minutes) continue;
+    const clockIn = new Date(s.clock_in_at);
+    if(clockIn >= startOfWeek){ thisWeekMin += s.duration_minutes; thisWeekCount++; }
+    else if(clockIn >= startOfLast){ lastWeekMin += s.duration_minutes; }
+  }
+  const fmtHrs = (m) => {
+    const h = Math.floor(m/60);
+    const mm = m % 60;
+    return mm ? `${h}h${mm}m` : `${h}h`;
+  };
+  setText('shiftThisWeek', fmtHrs(thisWeekMin));
+  setText('shiftThisWeekCount', thisWeekCount);
+  setText('shiftLastWeek', fmtHrs(lastWeekMin));
 }
 
 function renderClockedOut(){
@@ -2021,18 +2135,25 @@ async function renderMonthCal(){
 
   titleEl.textContent = calMonthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  // Fetch events for this month
+  // Fetch events + tasks with due dates for this month
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
   const startISO = firstDay.toISOString().slice(0,10);
   const endISO = lastDay.toISOString().slice(0,10);
   try{
-    const { data } = await sb.from('floor_events').select('*')
-      .gte('event_date', startISO).lte('event_date', endISO);
+    const [{ data: events }, { data: tasks }] = await Promise.all([
+      sb.from('floor_events').select('*').gte('event_date', startISO).lte('event_date', endISO),
+      sb.from('floor_tasks').select('*').gte('due_date', startISO).lte('due_date', endISO)
+    ]);
     calMonthEvents = {};
-    for(const e of (data||[])){
+    for(const e of (events||[])){
       if(!calMonthEvents[e.event_date]) calMonthEvents[e.event_date] = [];
-      calMonthEvents[e.event_date].push(e);
+      calMonthEvents[e.event_date].push({ ...e, _kind: 'event' });
+    }
+    for(const t of (tasks||[])){
+      if(!t.due_date) continue;
+      if(!calMonthEvents[t.due_date]) calMonthEvents[t.due_date] = [];
+      calMonthEvents[t.due_date].push({ ...t, _kind: 'task' });
     }
   }catch(_){ calMonthEvents = {}; }
 
@@ -2135,6 +2256,17 @@ function renderCalDayDetail(dateISO){
 
   if(events.length){
     html += events.map(e => {
+      if(e._kind === 'task'){
+        const tTime = e.due_time ? e.due_time.slice(0,5) : 'Due';
+        const assignees = taskAssignees(e);
+        const who = assignees[0] || '';
+        const done = e.status === 'done';
+        return `<div class="cal-event" style="border-left-color:${done?'var(--wolf-success)':'var(--wolf-warning)'};cursor:pointer" onclick="closeCalAndEdit('${e.id}')">
+          <span class="cal-time" style="color:${done?'var(--wolf-success)':'var(--wolf-warning)'}">${done?'✓':'⚑'} ${tTime}</span>
+          <span class="cal-event-title" style="${done?'text-decoration:line-through;color:var(--wolf-text-muted)':''}">${esc(e.title)}</span>
+          ${who ? `<span class="cal-event-who">${esc(who)}</span>` : ''}
+        </div>`;
+      }
       const t = e.all_day ? 'All day' : (e.start_time ? e.start_time.slice(0,5) : '');
       const who = (e.attendees && e.attendees.length) ? e.attendees[0] : (e.created_by || '');
       return `<div class="cal-event">
@@ -2144,7 +2276,7 @@ function renderCalDayDetail(dateISO){
       </div>`;
     }).join('');
   } else {
-    html += `<div style="padding:8px 10px;color:var(--wolf-text-muted);font-size:0.75rem">No events this day</div>`;
+    html += `<div style="padding:8px 10px;color:var(--wolf-text-muted);font-size:0.75rem">Nothing on this day</div>`;
   }
 
   html += `<button onclick="openAddModalForDate('${dateISO}')" style="display:block;width:100%;margin-top:10px;padding:10px;border-radius:10px;border:1px dashed var(--wolf-border-strong);background:transparent;color:var(--wolf-gold);font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;font-weight:700"><i class="fa-solid fa-plus"></i> Add Event for This Day</button></div>`;
@@ -2155,6 +2287,10 @@ function renderCalDayDetail(dateISO){
 function openAddModalForDate(dateISO){
   openAddModal('event');
   setTimeout(() => { const inp = document.getElementById('modalDate'); if(inp) inp.value = dateISO; }, 60);
+}
+
+function closeCalAndEdit(taskId){
+  openTaskEdit(taskId);
 }
 
 async function loadCalendar(){
@@ -2372,9 +2508,66 @@ function unlockBody(){
 }
 
 function openAddModal(kind){
+  editingTaskId = null;
+  document.getElementById('modalDeleteBtn').style.display = 'none';
+  const title = document.querySelector('#addModal .qa-title');
+  if(title) title.textContent = 'New Entry';
   document.getElementById('addModal').classList.add('open');
   lockBody();
   if(kind) setKind(kind);
+}
+
+function openTaskEdit(taskId){
+  const t = (allTasks || []).find(x => x.id === taskId);
+  if(!t){ showToast('Task not found','error'); return; }
+  editingTaskId = taskId;
+
+  // Reset pills first
+  document.querySelectorAll('.qa-pill[data-assign]').forEach(p => p.classList.remove('selected'));
+  document.querySelectorAll('.qa-pill[data-prio]').forEach(p => p.classList.remove('selected'));
+
+  // Open modal as Task
+  document.getElementById('addModal').classList.add('open');
+  lockBody();
+  setKind('task');
+
+  // Pre-fill
+  const titleEl = document.querySelector('#addModal .qa-title');
+  if(titleEl) titleEl.textContent = 'Edit Task';
+  document.getElementById('modalTitle').value = t.title || '';
+  document.getElementById('modalNotes').value = (t.metadata && t.metadata.notes) || '';
+  const assignees = taskAssignees(t);
+  selectedAssignees = [...assignees];
+  assignees.forEach(a => {
+    const pill = document.querySelector(`.qa-pill[data-assign="${a}"]`);
+    if(pill) pill.classList.add('selected');
+  });
+  selectedPrio = t.priority || 'normal';
+  const prioPill = document.querySelector(`.qa-pill[data-prio="${selectedPrio}"]`);
+  if(prioPill) prioPill.classList.add('selected');
+  // Dates
+  const schedDate = t.metadata && t.metadata.scheduled_date;
+  const schedTime = t.metadata && t.metadata.scheduled_time;
+  document.getElementById('modalDate').value = schedDate || '';
+  document.getElementById('modalTime').value = schedTime || '';
+  document.getElementById('modalDueDate').value = t.due_date || '';
+  document.getElementById('modalDueTime').value = t.due_time || '';
+
+  // Show Delete button
+  document.getElementById('modalDeleteBtn').style.display = '';
+}
+
+async function deleteEditingTask(){
+  if(!editingTaskId) return;
+  if(!confirm('Delete this task? This cannot be undone.')) return;
+  try{
+    await sb.from('floor_tasks').delete().eq('id', editingTaskId);
+    await writeAudit('task_deleted', 'Deleted task', { id: editingTaskId });
+    closeModal();
+    showToast('Task deleted');
+    await loadTasks();
+    await loadHome();
+  }catch(e){ showToast('Delete failed','error'); console.error(e); }
 }
 
 function attachModalPhoto(){
@@ -2402,6 +2595,10 @@ function clearModalPhoto(){
 function closeModal(){
   document.getElementById('addModal').classList.remove('open');
   unlockBody();
+  editingTaskId = null;
+  document.getElementById('modalDeleteBtn').style.display = 'none';
+  const title = document.querySelector('#addModal .qa-title');
+  if(title) title.textContent = 'New Entry';
   document.getElementById('modalTitle').value = '';
   document.getElementById('modalNotes').value = '';
   clearModalPhoto();
@@ -2481,27 +2678,40 @@ async function submitModal(){
       const meta = {};
       if(notes) meta.notes = notes;
       if(assignees.length > 1) meta.assignees = assignees;
-      // Scheduled ("when") date+time for the task — stored in metadata
       const schedDate = document.getElementById('modalDate').value || null;
       const schedTime = document.getElementById('modalTime').value || null;
       if(schedDate) meta.scheduled_date = schedDate;
       if(schedTime) meta.scheduled_time = schedTime;
       const dueDate = document.getElementById('modalDueDate').value || null;
       const dueTime = document.getElementById('modalDueTime').value || null;
-      await sb.from('floor_tasks').insert({
-        title,
-        assignee: primary,
-        priority: selectedPrio || 'normal',
-        status: 'open',
-        kind: 'task',
-        due_date: dueDate,
-        due_time: dueTime,
-        created_by: currentUser,
-        created_at: now,
-        updated_at: now,
-        metadata: meta
-      });
-      await writeAudit('task_created', 'Created task: ' + title + (assignees.length > 1 ? ' (' + assignees.length + ' assignees)' : ''), { assignees });
+
+      if(editingTaskId){
+        await sb.from('floor_tasks').update({
+          title,
+          assignee: primary,
+          priority: selectedPrio || 'normal',
+          due_date: dueDate,
+          due_time: dueTime,
+          updated_at: now,
+          metadata: meta
+        }).eq('id', editingTaskId);
+        await writeAudit('task_updated', 'Updated task: ' + title, { id: editingTaskId });
+      } else {
+        await sb.from('floor_tasks').insert({
+          title,
+          assignee: primary,
+          priority: selectedPrio || 'normal',
+          status: 'open',
+          kind: 'task',
+          due_date: dueDate,
+          due_time: dueTime,
+          created_by: currentUser,
+          created_at: now,
+          updated_at: now,
+          metadata: meta
+        });
+        await writeAudit('task_created', 'Created task: ' + title + (assignees.length > 1 ? ' (' + assignees.length + ' assignees)' : ''), { assignees });
+      }
     } else if(selectedKind === 'shop'){
       await sb.from('floor_shopping').insert({
         item: title,
