@@ -753,6 +753,14 @@ body.modal-open #main-app{overflow:hidden}
             </div>
             <button onclick="installApp()" id="installBtn" style="padding:7px 12px;border-radius:8px;border:1px solid var(--wolf-border-strong);background:var(--wolf-gold-whisper);color:var(--wolf-gold);font-size:0.65rem;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase">Install</button>
           </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:var(--wolf-slate);border:1px solid var(--wolf-border)">
+            <div style="font-size:1.3rem">🔄</div>
+            <div style="flex:1">
+              <div style="font-size:0.8rem;font-weight:600;color:var(--wolf-text)">Build Version</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:1px;text-transform:uppercase;color:var(--wolf-text-muted);margin-top:2px" id="buildVersionLabel">—</div>
+            </div>
+            <button onclick="forceReload()" style="padding:7px 12px;border-radius:8px;border:1px solid var(--wolf-border);background:var(--wolf-slate);color:var(--wolf-text-dim);font-size:0.65rem;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase">Force Reload</button>
+          </div>
         </div>
       </div>
       <div class="card">
@@ -1046,6 +1054,8 @@ body.modal-open #main-app{overflow:hidden}
 </div>
 
 <script>
+const FLOOR_BUILD = '2026-04-22-v3';
+console.log('%c🦊 The Floor · build ' + FLOOR_BUILD, 'color:#D4AF37;font-weight:bold;font-size:12px');
 const SUPA_URL = 'https://pvxlouqzmwdcrvmnfqfu.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2eGxvdXF6bXdkY3J2bW5mcWZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2MjY0MzIsImV4cCI6MjA5MjIwMjQzMn0.q22RcLEhswJ_82BovoxBfOJFgMCPfz-cSbU0M9JlJew';
 const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
@@ -1076,7 +1086,26 @@ function refreshInstallUI(){
   if(IS_IOS){ btn.textContent='How'; status.textContent='iPhone: Share → Add to Home Screen'; return; }
   if(deferredInstall){ btn.textContent='Install'; status.textContent='Tap to add to home screen'; return; }
   btn.textContent='How'; status.textContent='Open browser menu → Install';
+
+  // Build version indicator
+  const bv = document.getElementById('buildVersionLabel');
+  if(bv){ bv.textContent = FLOOR_BUILD; bv.style.color = 'var(--wolf-gold)'; }
 }
+async function forceReload(){
+  if(!confirm('This will clear the app cache and reload. Continue?')) return;
+  try{
+    if('serviceWorker' in navigator){
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for(const r of regs){ await r.unregister(); }
+    }
+    if('caches' in window){
+      const keys = await caches.keys();
+      for(const k of keys){ await caches.delete(k); }
+    }
+  }catch(e){ console.error(e); }
+  location.reload(true);
+}
+
 async function installApp(){
   if(deferredInstall){
     deferredInstall.prompt();
@@ -2048,25 +2077,32 @@ function distMeters(lat1, lng1, lat2, lng2){
 }
 
 async function clockIn(){
+  if(!currentUser){ showToast('Not signed in','error'); return; }
   const geoInfo = document.getElementById('geoInfo');
+  console.log('[clockIn] starting for', currentUser);
   // INSTANT feedback — create the shift row immediately, fetch geo in background
   try{
     const now = new Date().toISOString();
+    // Note: clock_in_geo left NULL until we have a real value
     const { data, error } = await sb.from('floor_shifts').insert({
       person: currentUser,
-      clock_in_at: now,
-      clock_in_geo: 'pending'
+      clock_in_at: now
     }).select().single();
-    if(error) throw error;
+    if(error){
+      console.error('[clockIn] insert error:', error);
+      throw error;
+    }
+    console.log('[clockIn] shift created:', data.id);
     activeShiftId = data.id;
     clockStart = new Date(now);
     renderClockedIn();
     showToast('Clocked in ✓');
-    geoInfo.innerHTML = '<div class="geo-pill" style="color:var(--wolf-text-muted)"><i class="fa-solid fa-location-crosshairs"></i> Checking location…</div>';
-    await writeAudit('clock_in', 'Clocked in', { shift_id: data.id });
+    if(geoInfo) geoInfo.innerHTML = '<div class="geo-pill" style="color:var(--wolf-text-muted)"><i class="fa-solid fa-location-crosshairs"></i> Checking location…</div>';
+    try{ await writeAudit('clock_in', 'Clocked in', { shift_id: data.id }); }catch(_){}
   }catch(e){
-    showToast('Clock-in failed: ' + (e.message||''), 'error');
-    console.error('clock_in:', e);
+    const msg = e && (e.message || e.details || JSON.stringify(e)) || 'Unknown error';
+    showToast('Clock-in failed: ' + msg, 'error');
+    console.error('[clockIn] caught:', e);
     return;
   }
 
