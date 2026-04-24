@@ -1575,6 +1575,9 @@ function switchTab(name, btn){
   if(tab) tab.classList.add('active');
   if(btn) btn.classList.add('active');
   else { const nb = document.querySelector('[data-tab="'+name+'"]'); if(nb) nb.classList.add('active'); }
+  // Hide FAB on wire (chat) tab — it overlaps the send button on mobile
+  const fab = document.querySelector('.fab');
+  if(fab) fab.style.display = name === 'wire' ? 'none' : '';
   // Lazy-render Calendar month on first open or tab re-open
   if(name === 'calendar' && calView === 'month') renderMonthCal();
 }
