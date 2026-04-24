@@ -668,7 +668,6 @@ button:focus-visible{outline:2px solid var(--wolf-gold);outline-offset:2px}
         <div class="wire-toggle">
           <button class="wire-toggle-btn active" onclick="switchWire('chat',this)"><i class="fa-solid fa-comments"></i> Chat</button>
           <button class="wire-toggle-btn" onclick="switchWire('notes',this)"><i class="fa-solid fa-sticky-note"></i> Notes</button>
-          <button class="wire-toggle-btn" onclick="switchWire('ideas',this)"><i class="fa-solid fa-lightbulb"></i> Ideas</button>
         </div>
         <div class="wire-section active" id="wire-chat">
           <div class="chat-list" id="chatList"><div class="loading-dots">Loading…</div><!-- -->
@@ -688,9 +687,23 @@ button:focus-visible{outline:2px solid var(--wolf-gold);outline-offset:2px}
           <div id="notesList"><div class="loading-dots">Loading…</div><!-- -->
 </div>
         </div>
-        <div class="wire-section" id="wire-ideas">
-          <div id="ideasList"><div class="loading-dots">Loading…</div></div>
+      </div>
+    </div>
+
+    <!-- IDEAS -->
+    <div class="tab-view" id="tab-ideas">
+      <div class="card">
+        <div class="card-label"><i class="fa-solid fa-lightbulb"></i> Ideas <span class="card-label-count" id="ideasCount">0</span></div>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button onclick="openAddModal('brainstorm')" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--wolf-gold);background:var(--wolf-gold-whisper);color:var(--wolf-gold);font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:1.2px;text-transform:uppercase;cursor:pointer;font-weight:700"><i class="fa-solid fa-plus"></i> New Idea</button>
         </div>
+        <div class="filter-row" id="ideasFilterRow">
+          <button class="filter-chip active" data-ideafilter="all" onclick="filterIdeas(this)">All</button>
+          <button class="filter-chip" data-ideafilter="mine" onclick="filterIdeas(this)">Mine</button>
+          <button class="filter-chip" data-ideafilter="assigned" onclick="filterIdeas(this)">Assigned to me</button>
+          <button class="filter-chip" data-ideafilter="unassigned" onclick="filterIdeas(this)">Unassigned</button>
+        </div>
+        <div id="ideasList"><div class="loading-dots">Loading…</div></div>
       </div>
     </div>
 
@@ -810,6 +823,7 @@ button:focus-visible{outline:2px solid var(--wolf-gold);outline-offset:2px}
     <button class="nav-btn" data-tab="calendar" onclick="switchTab('calendar',this)"><i class="fa-solid fa-calendar"></i><span>Cal</span></button>
     <button class="nav-btn" data-tab="vault" onclick="switchTab('vault',this)"><i class="fa-solid fa-vault"></i><span>Vault</span></button>
     <button class="nav-btn" data-tab="wire" onclick="switchTab('wire',this)"><i class="fa-solid fa-satellite-dish"></i><span>Wire</span></button>
+    <button class="nav-btn" data-tab="ideas" onclick="switchTab('ideas',this)"><i class="fa-solid fa-lightbulb"></i><span>Ideas</span><span class="nav-badge" id="badge-ideas">0</span></button>
     <button class="nav-btn" data-tab="requests" onclick="switchTab('requests',this)"><i class="fa-solid fa-inbox"></i><span>Ask</span><span class="nav-badge" id="badge-requests">0</span></button>
     <button class="nav-btn" data-tab="shifts" onclick="switchTab('shifts',this)"><i class="fa-solid fa-clock"></i><span>Shift</span></button>
     <button class="nav-btn admin-nav" data-tab="admin" onclick="switchTab('admin',this)"><i class="fa-solid fa-crown"></i><span>Admin</span></button>
@@ -1299,6 +1313,7 @@ let modalPhotoUrl = null;
 let editingTaskId = null;
 let editingEventId = null;
 let editingRequestId = null;
+let editingIdeaId = null;
 let selectedShopCat = 'grocery';
 let currentVaultSection = 'house';
 
@@ -1403,34 +1418,30 @@ async function signinSubmit(){
   setPortalState({ submitting: true, error: null });
 
   try{
-    const { data, error } = await sb.from('floor_members')
-      .select('user_key, display_name, first_name, title, password_hash, status')
-      .eq('user_key', user)
-      .maybeSingle();
+    const res = await fetch(SUPA_URL + '/functions/v1/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_key: user, password: pass })
+    });
 
-    if(error) throw error;
-    if(!data || data.status === 'inactive'){
-      // Generic error — don't leak whether the username exists
-      setPortalState({ submitting: false, error: 'Invalid username or password' });
+    const json = await res.json();
+
+    if(!res.ok || !json.ok){
+      setPortalState({ submitting: false, error: json.error || 'Invalid username or password' });
       document.getElementById('signinPass').value = '';
+      if(res.status === 429){
+        const btn = document.getElementById('signinSubmitBtn');
+        if(btn){ btn.disabled = true; setTimeout(()=>{ btn.disabled = false; }, 60000); }
+      }
       return;
     }
 
-    // Password check (if no hash set, allow direct login — admin hasn't set one yet)
-    if(data.password_hash){
-      const hashed = await hashPassword(data.user_key, pass);
-      if(hashed !== data.password_hash){
-        setPortalState({ submitting: false, error: 'Invalid username or password' });
-        document.getElementById('signinPass').value = '';
-        try{ document.getElementById('signinPass').focus(); }catch(_){}
-        return;
-      }
-    }
+    localStorage.setItem('floor_session_token', json.session_token);
+    localStorage.setItem('floor_session_expires', json.expires_at);
 
-    // Success — move to loading and finish
-    portalState.selected = data.user_key;
-    portalState.member = data;
-    finishLogin(data.user_key);
+    portalState.selected = json.member.user_key;
+    portalState.member = json.member;
+    finishLogin(json.member.user_key);
   }catch(e){
     console.error('signin error:', e);
     setPortalState({ submitting: false, error: 'Sign-in failed. Check your connection.' });
@@ -1479,6 +1490,8 @@ function signOut(){
   currentUser = null;
   localStorage.removeItem('floor_user');
   localStorage.removeItem('floor_session_valid');
+  localStorage.removeItem('floor_session_token');
+  localStorage.removeItem('floor_session_expires');
   document.getElementById('main-app').style.display = 'none';
   document.getElementById('portal').style.display = '';
   document.body.className = '';
@@ -1501,7 +1514,9 @@ function setupHeader(){
     document.getElementById('member-hero-block').style.display = 'none';
     document.getElementById('homeReqCard').style.display = 'block';
   } else {
-    document.getElementById('headerTitle').textContent = 'Good morning, ' + m.name;
+    const hour = new Date().getHours();
+    const greetWord = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    document.getElementById('headerTitle').textContent = greetWord + ', ' + m.name;
     document.getElementById('headerSubtitle').textContent = m.role;
     document.getElementById('adam-hero-block').style.display = 'none';
     document.getElementById('member-hero-block').style.display = 'block';
@@ -1512,7 +1527,7 @@ function setupHeader(){
 }
 
 async function loadAll(){
-  await Promise.all([loadHome(), loadTasks(), loadRequests(), loadShifts(), loadMessages(), loadCalendar(), loadVault(), loadShopping(), loadNotes()]);
+  await Promise.all([loadHome(), loadTasks(), loadRequests(), loadShifts(), loadMessages(), loadCalendar(), loadVault(), loadShopping(), loadNotes(), loadIdeas()]);
   if(currentUser === 'adam'){ await loadAdmin(); refreshInstallUI(); }
 }
 
@@ -1524,14 +1539,22 @@ function subscribeRealtime(){
     setConnState('connecting');
     realtimeChannel = sb.channel('floor-main')
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'floor_tasks'},(p)=>{ handleRealtimeForNotify('floor_tasks', p.new); })
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'floor_tasks'},(p)=>{ handleRealtimeForNotify('floor_tasks_update', p.new, p.old); })
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'floor_messages'},(p)=>{ handleRealtimeForNotify('floor_messages', p.new); })
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'floor_requests'},(p)=>{ handleRealtimeForNotify('floor_requests', p.new); })
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'floor_requests'},(p)=>{ handleRealtimeForNotify('floor_requests_update', p.new, p.old); })
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'floor_events'},(p)=>{ handleRealtimeForNotify('floor_events', p.new); })
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'floor_notes'},(p)=>{ handleRealtimeForNotify('floor_notes', p.new); })
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'floor_notes'},(p)=>{ handleRealtimeForNotify('floor_notes_update', p.new, p.old); })
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'floor_idea_comments'},(p)=>{ handleRealtimeForNotify('floor_idea_comments', p.new); })
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'floor_shopping'},(p)=>{ handleRealtimeForNotify('floor_shopping', p.new); })
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_tasks'},()=>{loadTasks();loadHome()})
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_messages'},()=>loadMessages())
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_requests'},()=>{loadRequests();loadHome()})
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_shifts'},()=>loadShifts())
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_shopping'},()=>loadShopping())
-      .on('postgres_changes',{event:'*',schema:'public',table:'floor_notes'},()=>loadNotes())
+      .on('postgres_changes',{event:'*',schema:'public',table:'floor_notes'},()=>{loadNotes();loadIdeas()})
+      .on('postgres_changes',{event:'*',schema:'public',table:'floor_idea_comments'},()=>loadIdeas())
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_wiki'},()=>loadVault())
       .on('postgres_changes',{event:'*',schema:'public',table:'floor_events'},()=>{ loadCalendar(); if(calView==='month') renderMonthCal(); })
       .subscribe((status)=>{
@@ -1607,13 +1630,13 @@ async function loadHome(){
       setText('myStat-req', reqs.filter(r=>r.submitted_by===currentUser).length);
     }
 
-    for(const key of ['alivia','chris']){
+    await Promise.all(['alivia','chris'].map(async (key) => {
       try{
         const { data } = await sb.from('floor_shifts').select('id').eq('person',key).is('clock_out_at',null).limit(1);
         const el = document.getElementById(key+'Status');
         if(el) el.textContent = (data && data.length) ? 'On clock' : 'Off clock';
       }catch(e){}
-    }
+    }));
 
     const show = currentUser==='adam' ? allTasks : allTasks.filter(t=>taskHasAssignee(t, currentUser));
     const openAll = show.filter(t => t.status !== 'done');
@@ -1686,7 +1709,7 @@ async function loadTasks(){
 }
 
 function taskAssignees(t){
-  // Prefer metadata.assignees (multi), fallback to assignee (single)
+  if(Array.isArray(t.assignees) && t.assignees.length) return t.assignees;
   if(t.metadata && Array.isArray(t.metadata.assignees) && t.metadata.assignees.length) return t.metadata.assignees;
   return t.assignee ? [t.assignee] : [];
 }
@@ -1918,7 +1941,7 @@ function switchWire(section, btn){
   document.getElementById('wire-'+section).classList.add('active');
 }
 
-// NOTES + IDEAS
+// NOTES
 function renderNoteRow(n){
   return `<div style="padding:12px 0;border-bottom:1px solid var(--wolf-border)">
     <div style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wolf-gold);margin-bottom:4px">
@@ -1931,22 +1954,184 @@ function renderNoteRow(n){
 
 async function loadNotes(){
   try{
-    const { data } = await sb.from('floor_notes').select('*').eq('archived', false).order('pinned',{ascending:false}).order('created_at',{ascending:false}).limit(60);
-    const all = data || [];
-    const notes = all.filter(n => n.color !== 'brainstorm');
-    const ideas = all.filter(n => n.color === 'brainstorm');
-
+    const { data } = await sb.from('floor_notes').select('*').eq('archived', false).neq('color','brainstorm').order('pinned',{ascending:false}).order('created_at',{ascending:false}).limit(60);
+    const notes = data || [];
     const notesEl = document.getElementById('notesList');
     if(notesEl){
       if(!notes.length) notesEl.innerHTML = emptyHTML('📝','No notes yet','Capture something for the team.', { label:'New Note', onclick:"openAddModal('note')" });
       else notesEl.innerHTML = notes.map(renderNoteRow).join('');
     }
-    const ideasEl = document.getElementById('ideasList');
-    if(ideasEl){
-      if(!ideas.length) ideasEl.innerHTML = emptyHTML('💡','No ideas yet','Brainstorm something for the household.', { label:'New Idea', onclick:"openAddModal('brainstorm')" });
-      else ideasEl.innerHTML = ideas.map(renderNoteRow).join('');
-    }
   }catch(e){ console.error(e); }
+}
+
+// IDEAS (brainstorm notes with threaded comments + multi-assign)
+let allIdeas = [];
+let ideaComments = {}; // { idea_id: [comment,...] }
+let ideaFilter = 'all';
+
+function ideaAssignees(n){
+  return (n.metadata && Array.isArray(n.metadata.assignees)) ? n.metadata.assignees : [];
+}
+
+function ideaTitleClean(n){
+  const t = n.title || '';
+  return t.replace(/^💡\s*/, '');
+}
+
+function filterIdeas(btn){
+  document.querySelectorAll('#ideasFilterRow .filter-chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  ideaFilter = btn.dataset.ideafilter;
+  renderIdeasList();
+}
+
+async function loadIdeas(){
+  try{
+    const [notesRes, cmtRes] = await Promise.all([
+      sb.from('floor_notes').select('*').eq('archived', false).eq('color','brainstorm').order('pinned',{ascending:false}).order('created_at',{ascending:false}).limit(100),
+      sb.from('floor_idea_comments').select('*').order('created_at',{ascending:true}).limit(500),
+    ]);
+    allIdeas = notesRes.data || [];
+    ideaComments = {};
+    for(const c of (cmtRes.data || [])){
+      (ideaComments[c.idea_id] = ideaComments[c.idea_id] || []).push(c);
+    }
+    setText('ideasCount', allIdeas.length);
+    // Badge shows count of ideas assigned to me
+    const myCount = allIdeas.filter(n => ideaAssignees(n).includes(currentUser)).length;
+    const badge = document.getElementById('badge-ideas');
+    if(badge){
+      if(myCount > 0){ badge.textContent = myCount > 99 ? '99+' : myCount; badge.classList.add('show'); }
+      else badge.classList.remove('show');
+    }
+    renderIdeasList();
+  }catch(e){ console.error('loadIdeas',e); }
+}
+
+function renderIdeasList(){
+  const el = document.getElementById('ideasList');
+  if(!el) return;
+  let list = allIdeas;
+  if(ideaFilter === 'mine') list = list.filter(n => n.author === currentUser);
+  else if(ideaFilter === 'assigned') list = list.filter(n => ideaAssignees(n).includes(currentUser));
+  else if(ideaFilter === 'unassigned') list = list.filter(n => ideaAssignees(n).length === 0);
+  if(!list.length){
+    el.innerHTML = emptyHTML('💡','No ideas yet','Brainstorm something for the household.', { label:'New Idea', onclick:"openAddModal('brainstorm')" });
+    return;
+  }
+  el.innerHTML = list.map(renderIdeaCard).join('');
+}
+
+function renderIdeaCard(n){
+  const authorMem = MEMBERS[n.author] || { name: n.author, cls:'adam' };
+  const assignees = ideaAssignees(n);
+  const assigneeHtml = assignees.length ? assignees.map(a => {
+    const m = MEMBERS[a] || { name: a };
+    return `<span class="task-assignee ${a}">${esc(m.name||a)}</span>`;
+  }).join(' ') : '<span style="font-family:\'JetBrains Mono\',monospace;font-size:0.55rem;letter-spacing:1.2px;text-transform:uppercase;color:var(--wolf-text-muted)">Unassigned</span>';
+  const cmts = ideaComments[n.id] || [];
+  const canEdit = n.author === currentUser || currentUser === 'adam';
+  const thread = cmts.map(renderIdeaComment).join('') || `<div style="font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:1.2px;text-transform:uppercase;color:var(--wolf-text-muted);padding:6px 0">No replies yet</div>`;
+  return `<div class="card" style="margin-bottom:12px;padding:14px" data-idea-id="${n.id}">
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">
+      <div style="flex:1;min-width:0">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wolf-gold);margin-bottom:4px">
+          ${n.pinned ? '📌 ' : ''}${esc(authorMem.name)} · ${new Date(n.created_at).toLocaleDateString()}
+        </div>
+        <div style="font-size:0.95rem;font-weight:600;color:var(--wolf-gold-pale);margin-bottom:6px;font-family:'Playfair Display',serif">💡 ${esc(ideaTitleClean(n))}</div>
+      </div>
+      ${canEdit ? `<button onclick="openIdeaEdit('${n.id}')" title="Edit" style="background:none;border:1px solid var(--wolf-border);color:var(--wolf-text-muted);border-radius:6px;width:28px;height:28px;cursor:pointer;flex-shrink:0"><i class="fa-solid fa-pen-to-square" style="font-size:0.7rem"></i></button>` : ''}
+    </div>
+    <div style="font-size:0.82rem;color:var(--wolf-text);line-height:1.5;white-space:pre-wrap;margin-bottom:10px">${esc(n.body)}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wolf-text-muted);margin-right:4px">Assigned</span>
+      ${assigneeHtml}
+    </div>
+    <div style="border-top:1px solid var(--wolf-border);padding-top:10px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wolf-text-muted);margin-bottom:8px">Thread · ${cmts.length}</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">${thread}</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input class="idea-reply-input" id="ideaReply-${n.id}" placeholder="Reply…" onkeydown="if(event.key==='Enter')postIdeaComment('${n.id}')" style="flex:1;padding:8px 10px;background:var(--wolf-black);color:var(--wolf-text);border:1px solid var(--wolf-border);border-radius:8px;outline:none;font-family:'Montserrat',sans-serif;font-size:0.8rem">
+        <button onclick="postIdeaComment('${n.id}')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--wolf-gold);background:var(--wolf-gold-whisper);color:var(--wolf-gold);font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:1.2px;text-transform:uppercase;cursor:pointer;font-weight:700"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderIdeaComment(c){
+  const mem = MEMBERS[c.author] || { name: c.author, cls:'adam' };
+  const canDel = c.author === currentUser || currentUser === 'adam';
+  return `<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0">
+    <span class="task-assignee ${mem.cls||'adam'}" style="flex-shrink:0">${esc(mem.name||c.author)}</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:0.8rem;color:var(--wolf-text);line-height:1.45;white-space:pre-wrap">${esc(c.body)}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:1.2px;color:var(--wolf-text-muted);margin-top:2px">${relTime(c.created_at)}</div>
+    </div>
+    ${canDel ? `<button onclick="deleteIdeaComment('${c.id}')" title="Delete" style="background:none;border:none;color:var(--wolf-text-muted);cursor:pointer;padding:2px 4px;font-size:0.7rem"><i class="fa-solid fa-xmark"></i></button>` : ''}
+  </div>`;
+}
+
+async function postIdeaComment(ideaId){
+  const inp = document.getElementById('ideaReply-'+ideaId);
+  if(!inp) return;
+  const body = (inp.value||'').trim();
+  if(!body) return;
+  inp.value = '';
+  try{
+    await sb.from('floor_idea_comments').insert({
+      idea_id: ideaId,
+      author: currentUser,
+      body
+    });
+    await writeAudit('idea_commented', 'Replied on idea', { idea_id: ideaId });
+    await loadIdeas();
+  }catch(e){ showToast('Reply failed','error'); console.error(e); }
+}
+
+async function deleteIdeaComment(id){
+  if(!confirm('Delete this reply?')) return;
+  try{
+    await sb.from('floor_idea_comments').delete().eq('id', id);
+    await loadIdeas();
+  }catch(e){ showToast('Delete failed','error'); console.error(e); }
+}
+
+function openIdeaEdit(ideaId){
+  const n = (allIdeas || []).find(x => x.id === ideaId);
+  if(!n){ showToast('Idea not found','error'); return; }
+  editingIdeaId = ideaId;
+
+  document.querySelectorAll('.qa-pill[data-assign]').forEach(p => p.classList.remove('selected'));
+
+  document.getElementById('addModal').classList.add('open');
+  lockBody();
+  setKind('brainstorm');
+
+  const titleEl = document.querySelector('#addModal .qa-title');
+  if(titleEl) titleEl.textContent = 'Edit Idea';
+  document.getElementById('modalTitle').value = ideaTitleClean(n);
+  document.getElementById('modalNotes').value = n.body || '';
+
+  const assignees = ideaAssignees(n);
+  selectedAssignees = [...assignees];
+  assignees.forEach(a => {
+    const pill = document.querySelector(`.qa-pill[data-assign="${a}"]`);
+    if(pill) pill.classList.add('selected');
+  });
+
+  document.getElementById('modalDeleteBtn').style.display = '';
+}
+
+async function deleteEditingIdea(){
+  if(!editingIdeaId) return;
+  if(!confirm('Delete this idea and all its replies? This cannot be undone.')) return;
+  try{
+    await sb.from('floor_notes').delete().eq('id', editingIdeaId);
+    await writeAudit('idea_deleted', 'Deleted idea', { id: editingIdeaId });
+    closeModal();
+    showToast('Idea deleted');
+    await loadIdeas();
+  }catch(e){ showToast('Delete failed','error'); console.error(e); }
 }
 
 // REQUESTS
@@ -2288,6 +2473,8 @@ function goToToday(){
   renderMonthCal();
 }
 
+let calLastFetchedMonth = null;
+
 async function renderMonthCal(){
   const titleEl = document.getElementById('calMonthTitle');
   const gridEl = document.getElementById('calMonthGrid');
@@ -2296,31 +2483,36 @@ async function renderMonthCal(){
 
   const year = calMonthDate.getFullYear();
   const month = calMonthDate.getMonth();
+  const monthKey = `${year}-${month}`;
 
   titleEl.textContent = calMonthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  // Fetch events + tasks with due dates for this month
+  if(calLastFetchedMonth !== monthKey){
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startISO = firstDay.toISOString().slice(0,10);
+    const endISO = lastDay.toISOString().slice(0,10);
+    try{
+      const [{ data: events }, { data: tasks }] = await Promise.all([
+        sb.from('floor_events').select('*').gte('event_date', startISO).lte('event_date', endISO),
+        sb.from('floor_tasks').select('*').gte('due_date', startISO).lte('due_date', endISO)
+      ]);
+      calMonthEvents = {};
+      for(const e of (events||[])){
+        if(!calMonthEvents[e.event_date]) calMonthEvents[e.event_date] = [];
+        calMonthEvents[e.event_date].push({ ...e, _kind: 'event' });
+      }
+      for(const t of (tasks||[])){
+        if(!t.due_date) continue;
+        if(!calMonthEvents[t.due_date]) calMonthEvents[t.due_date] = [];
+        calMonthEvents[t.due_date].push({ ...t, _kind: 'task' });
+      }
+    }catch(_){ calMonthEvents = {}; }
+    calLastFetchedMonth = monthKey;
+  }
+
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
-  const startISO = firstDay.toISOString().slice(0,10);
-  const endISO = lastDay.toISOString().slice(0,10);
-  try{
-    const [{ data: events }, { data: tasks }] = await Promise.all([
-      sb.from('floor_events').select('*').gte('event_date', startISO).lte('event_date', endISO),
-      sb.from('floor_tasks').select('*').gte('due_date', startISO).lte('due_date', endISO)
-    ]);
-    calMonthEvents = {};
-    for(const e of (events||[])){
-      if(!calMonthEvents[e.event_date]) calMonthEvents[e.event_date] = [];
-      calMonthEvents[e.event_date].push({ ...e, _kind: 'event' });
-    }
-    for(const t of (tasks||[])){
-      if(!t.due_date) continue;
-      if(!calMonthEvents[t.due_date]) calMonthEvents[t.due_date] = [];
-      calMonthEvents[t.due_date].push({ ...t, _kind: 'task' });
-    }
-  }catch(_){ calMonthEvents = {}; }
-
   const firstDow = firstDay.getDay();
   const daysInMonth = lastDay.getDate();
   const prevLastDay = new Date(year, month, 0).getDate();
@@ -2381,21 +2573,11 @@ async function renderMonthCal(){
 
 function pickCalDay(dateISO){
   calSelectedDate = dateISO;
-  // Jump month if selecting from other-month row
   const d = new Date(dateISO + 'T12:00:00');
   if(d.getMonth() !== calMonthDate.getMonth() || d.getFullYear() !== calMonthDate.getFullYear()){
     calMonthDate = new Date(d.getFullYear(), d.getMonth(), 1);
-    renderMonthCal();
-  } else {
-    document.querySelectorAll('.cal-cell.selected').forEach(c => c.classList.remove('selected'));
-    renderCalDayDetail(dateISO);
-    // Re-render to apply selected state without full fetch
-    const gridEl = document.getElementById('calMonthGrid');
-    if(gridEl){
-      // Simple approach: re-render from cache
-      renderMonthCal();
-    }
   }
+  renderMonthCal(); // uses cache if same month, fetches if month changed
 }
 
 function renderCalDayDetail(dateISO){
@@ -2674,6 +2856,9 @@ function unlockBody(){
 
 function openAddModal(kind){
   editingTaskId = null;
+  editingEventId = null;
+  editingRequestId = null;
+  editingIdeaId = null;
   document.getElementById('modalDeleteBtn').style.display = 'none';
   const title = document.querySelector('#addModal .qa-title');
   if(title) title.textContent = 'New Entry';
@@ -2726,6 +2911,7 @@ function deleteEditingItem(){
   if(editingTaskId) return deleteEditingTask();
   if(editingEventId) return deleteEditingEvent();
   if(editingRequestId) return deleteEditingRequest();
+  if(editingIdeaId) return deleteEditingIdea();
 }
 
 async function deleteEditingTask(){
@@ -2856,6 +3042,7 @@ function closeModal(){
   editingTaskId = null;
   editingEventId = null;
   editingRequestId = null;
+  editingIdeaId = null;
   document.getElementById('modalDeleteBtn').style.display = 'none';
   const title = document.querySelector('#addModal .qa-title');
   if(title) title.textContent = 'New Entry';
@@ -2894,7 +3081,7 @@ function setKind(kind){
     else dateLabel.textContent = 'Date & Time';
   }
   document.getElementById('modalDueSection').style.display = (kind==='task') ? '' : 'none';
-  document.getElementById('modalAssignSection').style.display = ['shop','note','brainstorm'].includes(kind) ? 'none' : '';
+  document.getElementById('modalAssignSection').style.display = ['shop','note'].includes(kind) ? 'none' : '';
   document.getElementById('modalPrioSection').style.display = (kind==='task') ? '' : 'none';
   document.getElementById('modalAmountSection').style.display = (kind==='request') ? '' : 'none';
   document.getElementById('modalPhotoSection').style.display = (kind==='request') ? '' : 'none';
@@ -2955,6 +3142,7 @@ async function submitModal(){
         await sb.from('floor_tasks').update({
           title,
           assignee: primary,
+          assignees,
           priority: selectedPrio || 'normal',
           due_date: dueDate,
           due_time: dueTime,
@@ -2966,6 +3154,7 @@ async function submitModal(){
         await sb.from('floor_tasks').insert({
           title,
           assignee: primary,
+          assignees,
           priority: selectedPrio || 'normal',
           status: 'open',
           kind: 'task',
@@ -2999,16 +3188,29 @@ async function submitModal(){
       });
       await writeAudit('note_added', 'Added note: ' + title, {});
     } else if(selectedKind === 'brainstorm'){
-      await sb.from('floor_notes').insert({
-        title: '💡 ' + title,
-        body: notes || title,
-        author: currentUser,
-        pinned: false,
-        archived: false,
-        color: 'brainstorm',
-        created_at: now
-      });
-      await writeAudit('idea_added', 'Brainstorm idea: ' + title, {});
+      const assignees = selectedAssignees.slice();
+      const ideaTitle = title.startsWith('💡') ? title : ('💡 ' + title);
+      if(editingIdeaId){
+        await sb.from('floor_notes').update({
+          title: ideaTitle,
+          body: notes || title,
+          metadata: { assignees },
+          updated_at: now
+        }).eq('id', editingIdeaId);
+        await writeAudit('idea_updated', 'Updated idea: ' + title, { id: editingIdeaId, assignees });
+      } else {
+        await sb.from('floor_notes').insert({
+          title: ideaTitle,
+          body: notes || title,
+          author: currentUser,
+          pinned: false,
+          archived: false,
+          color: 'brainstorm',
+          metadata: { assignees },
+          created_at: now
+        });
+        await writeAudit('idea_added', 'Brainstorm idea: ' + title, { assignees });
+      }
     } else if(selectedKind === 'event'){
       const dateVal = document.getElementById('modalDate').value;
       const timeVal = document.getElementById('modalTime').value;
@@ -3329,7 +3531,10 @@ async function sendHandoff(){
 //   • Task/event due in 24h or 1h
 //   • Kaleesi day reminder (once per day on first load)
 
-let notifyLastIds = { msgs: new Set(), tasks: new Set(), reqs: new Set() };
+let notifyLastIds = { msgs: new Set(), tasks: new Set(), reqs: new Set(), events: new Set(), notes: new Set(), ideaComments: new Set(), shopping: new Set() };
+let notifyTaskSnap = {};    // id -> { assignees:[], status }
+let notifyReqSnap = {};     // id -> status
+let notifyIdeaSnap = {};    // id -> { assignees:[] }
 let notifyInitialized = false;
 
 async function requestNotifyPermission(){
@@ -3362,8 +3567,25 @@ async function initNotifications(){
 
   // Seed the "already seen" sets so we don't fire on first data load
   notifyLastIds.msgs = new Set((await sb.from('floor_messages').select('id').order('created_at',{ascending:false}).limit(50)).data?.map(r=>r.id) || []);
-  notifyLastIds.tasks = new Set((await sb.from('floor_tasks').select('id').order('created_at',{ascending:false}).limit(50)).data?.map(r=>r.id) || []);
-  notifyLastIds.reqs = new Set((await sb.from('floor_requests').select('id').order('created_at',{ascending:false}).limit(50)).data?.map(r=>r.id) || []);
+  const tasksSeed = (await sb.from('floor_tasks').select('id,assignee,status,metadata').order('created_at',{ascending:false}).limit(200)).data || [];
+  notifyLastIds.tasks = new Set(tasksSeed.map(r=>r.id));
+  for(const t of tasksSeed){
+    const a = (t.metadata && Array.isArray(t.metadata.assignees)) ? t.metadata.assignees : (t.assignee ? [t.assignee] : []);
+    notifyTaskSnap[t.id] = { assignees: a, status: t.status };
+  }
+  const reqsSeed = (await sb.from('floor_requests').select('id,status').order('created_at',{ascending:false}).limit(200)).data || [];
+  notifyLastIds.reqs = new Set(reqsSeed.map(r=>r.id));
+  for(const r of reqsSeed) notifyReqSnap[r.id] = r.status;
+  notifyLastIds.events = new Set((await sb.from('floor_events').select('id').order('created_at',{ascending:false}).limit(50)).data?.map(r=>r.id) || []);
+  const notesSeed = (await sb.from('floor_notes').select('id,color,metadata').order('created_at',{ascending:false}).limit(100)).data || [];
+  notifyLastIds.notes = new Set(notesSeed.map(r=>r.id));
+  for(const n of notesSeed){
+    if(n.color === 'brainstorm'){
+      notifyIdeaSnap[n.id] = { assignees: (n.metadata && Array.isArray(n.metadata.assignees)) ? n.metadata.assignees : [] };
+    }
+  }
+  notifyLastIds.ideaComments = new Set((await sb.from('floor_idea_comments').select('id').order('created_at',{ascending:false}).limit(100)).data?.map(r=>r.id) || []);
+  notifyLastIds.shopping = new Set((await sb.from('floor_shopping').select('id').order('created_at',{ascending:false}).limit(50)).data?.map(r=>r.id) || []);
 
   // Check existing data for due-soon reminders + kaleesi day
   await checkDueReminders();
@@ -3372,37 +3594,164 @@ async function initNotifications(){
   setInterval(checkDueReminders, 5 * 60 * 1000);
 }
 
-// When a new request, task, or message arrives via realtime, compare IDs
-function handleRealtimeForNotify(table, newRow){
+// When a new request, task, message, event, idea, or comment arrives via realtime,
+// compare IDs and fire the right notification for the current user.
+function handleRealtimeForNotify(table, newRow, oldRow){
   if(!newRow || !newRow.id) return;
+
+  // ── CHAT MESSAGES — @mention ─────────────────────────────────────
   if(table === 'floor_messages'){
     if(notifyLastIds.msgs.has(newRow.id)) return;
     notifyLastIds.msgs.add(newRow.id);
-    if(newRow.author === currentUser) return; // own message
+    if(newRow.author === currentUser) return;
     const body = String(newRow.body || '');
+    const who = MEMBERS[newRow.author]?.name || newRow.author;
     const mentionPattern = new RegExp('@' + currentUser + '\\b', 'i');
     if(mentionPattern.test(body)){
-      const who = MEMBERS[newRow.author]?.name || newRow.author;
       notify(`${who} mentioned you`, body.slice(0, 140), 'mention-'+newRow.id);
+    } else {
+      // Low-key notification for any new message (avoid spam via tag dedupe)
+      notify(`${who} on the Wire`, body.slice(0, 140), 'msg-'+newRow.id);
     }
-  } else if(table === 'floor_tasks'){
+    return;
+  }
+
+  // ── TASKS — new assigned to me ───────────────────────────────────
+  if(table === 'floor_tasks'){
     if(notifyLastIds.tasks.has(newRow.id)) return;
     notifyLastIds.tasks.add(newRow.id);
-    if(newRow.created_by === currentUser) return;
     const assignees = (newRow.metadata && Array.isArray(newRow.metadata.assignees)) ? newRow.metadata.assignees : (newRow.assignee ? [newRow.assignee] : []);
+    notifyTaskSnap[newRow.id] = { assignees, status: newRow.status };
+    if(newRow.created_by === currentUser) return;
     if(assignees.includes(currentUser)){
       notify('New task for you', newRow.title || 'Open Tasks tab to view', 'task-'+newRow.id);
     }
-  } else if(table === 'floor_requests'){
+    return;
+  }
+
+  // ── TASKS — reassigned / completed ───────────────────────────────
+  if(table === 'floor_tasks_update'){
+    const prev = notifyTaskSnap[newRow.id] || { assignees: [], status: null };
+    const nextAssignees = (newRow.metadata && Array.isArray(newRow.metadata.assignees)) ? newRow.metadata.assignees : (newRow.assignee ? [newRow.assignee] : []);
+    // Newly added assignee includes me
+    const addedMe = nextAssignees.includes(currentUser) && !prev.assignees.includes(currentUser);
+    if(addedMe){
+      notify('Assigned to you', newRow.title || 'Open Tasks tab', 'task-assign-'+newRow.id+'-'+Date.now());
+    }
+    // Task was completed — notify interested parties (creator + assignees)
+    if(prev.status !== 'done' && newRow.status === 'done'){
+      const wasMine = prev.assignees.includes(currentUser) || nextAssignees.includes(currentUser) || newRow.created_by === currentUser;
+      const completer = newRow.metadata && newRow.metadata.completed_by;
+      if(wasMine && completer !== currentUser){
+        notify('Task completed', newRow.title || '', 'task-done-'+newRow.id);
+      }
+    }
+    notifyTaskSnap[newRow.id] = { assignees: nextAssignees, status: newRow.status };
+    return;
+  }
+
+  // ── REQUESTS — new pending (notify approver = adam) ──────────────
+  if(table === 'floor_requests'){
     if(notifyLastIds.reqs.has(newRow.id)) return;
     notifyLastIds.reqs.add(newRow.id);
+    notifyReqSnap[newRow.id] = newRow.status;
     if(newRow.submitted_by === currentUser) return;
-    // Only notify Adam of new requests (he's the approver)
     if(currentUser === 'adam' && newRow.status === 'pending'){
       const from = MEMBERS[newRow.submitted_by]?.name || newRow.submitted_by;
       const amt = newRow.amount_cents ? ' · $' + (newRow.amount_cents/100).toFixed(0) : '';
       notify(`Request from ${from}${amt}`, newRow.title || newRow.notes || '', 'req-'+newRow.id);
     }
+    return;
+  }
+
+  // ── REQUESTS — status changed (notify submitter) ─────────────────
+  if(table === 'floor_requests_update'){
+    const prevStatus = notifyReqSnap[newRow.id];
+    notifyReqSnap[newRow.id] = newRow.status;
+    if(prevStatus === newRow.status) return;
+    if(newRow.submitted_by !== currentUser) return;
+    if(newRow.status === 'approved' || newRow.status === 'denied'){
+      const verb = newRow.status === 'approved' ? '✓ Approved' : '✗ Denied';
+      notify(`${verb}: ${newRow.title || newRow.kind || 'Your request'}`, newRow.notes || '', 'req-res-'+newRow.id);
+    }
+    return;
+  }
+
+  // ── EVENTS — new with me as attendee ─────────────────────────────
+  if(table === 'floor_events'){
+    if(notifyLastIds.events.has(newRow.id)) return;
+    notifyLastIds.events.add(newRow.id);
+    if(newRow.created_by === currentUser) return;
+    const attendees = Array.isArray(newRow.attendees) ? newRow.attendees : [];
+    if(attendees.includes(currentUser)){
+      const when = newRow.event_date ? ` · ${newRow.event_date}${newRow.start_time ? ' '+String(newRow.start_time).slice(0,5) : ''}` : '';
+      notify('New event on your calendar', (newRow.title || '') + when, 'event-'+newRow.id);
+    }
+    return;
+  }
+
+  // ── IDEAS (brainstorm notes) ─────────────────────────────────────
+  if(table === 'floor_notes'){
+    if(notifyLastIds.notes.has(newRow.id)) return;
+    notifyLastIds.notes.add(newRow.id);
+    if(newRow.color !== 'brainstorm') return;
+    const assignees = (newRow.metadata && Array.isArray(newRow.metadata.assignees)) ? newRow.metadata.assignees : [];
+    notifyIdeaSnap[newRow.id] = { assignees };
+    if(newRow.author === currentUser) return;
+    const who = MEMBERS[newRow.author]?.name || newRow.author;
+    // If assigned to me specifically, stronger notify
+    if(assignees.includes(currentUser)){
+      notify(`${who} assigned you an idea`, String(newRow.title || '').replace(/^💡\s*/,''), 'idea-'+newRow.id);
+    } else if(assignees.length === 0){
+      // Open-to-all new idea
+      notify(`${who} posted a new idea`, String(newRow.title || '').replace(/^💡\s*/,''), 'idea-'+newRow.id);
+    }
+    return;
+  }
+
+  // ── IDEAS — updated (assignee added) ─────────────────────────────
+  if(table === 'floor_notes_update'){
+    if(newRow.color !== 'brainstorm') return;
+    const prev = notifyIdeaSnap[newRow.id] || { assignees: [] };
+    const next = (newRow.metadata && Array.isArray(newRow.metadata.assignees)) ? newRow.metadata.assignees : [];
+    const addedMe = next.includes(currentUser) && !prev.assignees.includes(currentUser);
+    notifyIdeaSnap[newRow.id] = { assignees: next };
+    if(addedMe){
+      notify('You were assigned to an idea', String(newRow.title || '').replace(/^💡\s*/,''), 'idea-assign-'+newRow.id+'-'+Date.now());
+    }
+    return;
+  }
+
+  // ── IDEA COMMENTS — thread reply ─────────────────────────────────
+  if(table === 'floor_idea_comments'){
+    if(notifyLastIds.ideaComments.has(newRow.id)) return;
+    notifyLastIds.ideaComments.add(newRow.id);
+    if(newRow.author === currentUser) return;
+    // Notify: idea author + assignees + prior thread participants
+    const idea = (allIdeas || []).find(n => n.id === newRow.idea_id);
+    const participants = new Set();
+    if(idea){
+      if(idea.author) participants.add(idea.author);
+      for(const a of ideaAssignees(idea)) participants.add(a);
+    }
+    for(const c of (ideaComments[newRow.idea_id] || [])){
+      if(c.author) participants.add(c.author);
+    }
+    if(!participants.has(currentUser)) return;
+    const who = MEMBERS[newRow.author]?.name || newRow.author;
+    const ideaTitle = idea ? String(idea.title || '').replace(/^💡\s*/,'') : 'your idea';
+    notify(`${who} replied on "${ideaTitle.slice(0,40)}"`, String(newRow.body||'').slice(0,140), 'idea-reply-'+newRow.id);
+    return;
+  }
+
+  // ── SHOPPING — new item added by someone else ────────────────────
+  if(table === 'floor_shopping'){
+    if(notifyLastIds.shopping.has(newRow.id)) return;
+    notifyLastIds.shopping.add(newRow.id);
+    if(newRow.added_by === currentUser) return;
+    const who = MEMBERS[newRow.added_by]?.name || newRow.added_by || 'Someone';
+    notify(`${who} added to shopping`, newRow.item || '', 'shop-'+newRow.id);
+    return;
   }
 }
 
@@ -3901,11 +4250,14 @@ function attachTaskSwipe(){
 // AUTO-LOGIN — if saved session is valid, skip the form; otherwise pre-fill username
 (async function autoLogin(){
   const saved = localStorage.getItem('floor_user');
-  const sessionOk = localStorage.getItem('floor_session_valid') === '1';
+  const token = localStorage.getItem('floor_session_token');
+  const expires = localStorage.getItem('floor_session_expires');
 
-  if(saved && sessionOk){
+  if(saved && token && expires && new Date(expires) > new Date()){
     try{
-      const { data } = await sb.from('floor_members').select('user_key, display_name, first_name, title, status').eq('user_key', saved).single();
+      const { data } = await sb.from('floor_members')
+        .select('user_key, display_name, first_name, title, status')
+        .eq('user_key', saved).single();
       if(data && data.status !== 'inactive'){
         portalState.selected = saved;
         portalState.member = data;
@@ -3913,12 +4265,11 @@ function attachTaskSwipe(){
         return;
       }
     }catch(_){}
-    // Session existed but member lookup failed — clear stale session
-    localStorage.removeItem('floor_session_valid');
+    localStorage.removeItem('floor_session_token');
+    localStorage.removeItem('floor_session_expires');
   }
 
   if(saved){
-    // Pre-fill the username (common case: returning user who signed out)
     const u = document.getElementById('signinUser');
     if(u) u.value = saved;
     const p = document.getElementById('signinPass');

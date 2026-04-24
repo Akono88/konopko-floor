@@ -1,5 +1,5 @@
 // Konopko Floor — Service Worker
-const CACHE_NAME = 'floor-v6-2026-04-22-polish';
+const CACHE_NAME = 'floor-v7-2026-04-24';
 const APP_SHELL = [
   '/konopko-floor/',
   '/konopko-floor/index.html',
